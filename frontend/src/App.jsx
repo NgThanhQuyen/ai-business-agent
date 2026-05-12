@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axiosClient from "./api/axiosClient";
 import SearchForm  from "./components/SearchForm";
 import DataTable   from "./components/DataTable";
@@ -14,6 +14,41 @@ export default function App() {
   const [searched,   setSearched]   = useState(false);
   const [query,      setQuery]      = useState(null);
   const [exportFormat, setExportFormat] = useState("csv");
+  
+  const [taskId, setTaskId] = useState(null);
+  const [progress, setProgress] = useState(0);
+  const [loadingMessage, setLoadingMessage] = useState("");
+
+  useEffect(() => {
+    let intervalId;
+    if (taskId) {
+      intervalId = setInterval(async () => {
+        try {
+          const { data } = await axiosClient.get(`/api/tasks/${taskId}`);
+          setProgress(data.progress || 0);
+          setLoadingMessage(data.message || "");
+          
+          if (data.status === "completed") {
+            setBusinesses(data.data?.businesses || []);
+            setInsights(data.data?.insights || []);
+            setLoading(false);
+            setTaskId(null); // Stop polling
+          } else if (data.status === "failed") {
+            setError(data.message || "Pipeline failed");
+            setLoading(false);
+            setTaskId(null); // Stop polling
+          }
+        } catch (err) {
+          setError(err.message);
+          setLoading(false);
+          setTaskId(null); // Stop polling
+        }
+      }, 1500);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [taskId]);
 
   const handleSearch = async ({ keyword, location, min_rating, result_limit }) => {
     setLoading(true);
@@ -21,6 +56,8 @@ export default function App() {
     setBusinesses([]);
     setInsights([]);
     setQuery({ keyword, location, min_rating, result_limit });
+    setProgress(0);
+    setLoadingMessage("Khởi tạo task...");
 
     try {
       const payload = { keyword, location };
@@ -28,12 +65,11 @@ export default function App() {
       if (result_limit !== undefined) payload.result_limit = result_limit;
 
       const { data } = await axiosClient.post("/api/search", payload);
-      setBusinesses(data.businesses);
-      setInsights(data.insights || []);
+      setTaskId(data.task_id);
     } catch (err) {
       setError(err.message);
-    } finally {
       setLoading(false);
+    } finally {
       setSearched(true);
     }
   };
@@ -62,13 +98,18 @@ export default function App() {
 
         {/* Loading state */}
         {loading && (
-          <div className="mt-16 flex flex-col items-center gap-4 text-dim">
-            <div className="relative w-12 h-12">
-              <div className="absolute inset-0 rounded-full border-2 border-pulse/20" />
-              <div className="absolute inset-0 rounded-full border-t-2 border-pulse animate-spin" />
+          <div className="mt-16 max-w-xl mx-auto flex flex-col items-center gap-4 text-dim">
+            <div className="w-full bg-card rounded-full h-4 border border-border overflow-hidden relative shadow-inner">
+              <div 
+                className="h-full transition-all duration-500 ease-out bg-[#00FF94]" 
+                style={{ 
+                  width: `${progress}%`, 
+                  boxShadow: "0 0 15px #00FF94, 0 0 30px #00FF94" 
+                }}
+              />
             </div>
-            <p className="font-mono text-xs tracking-widest uppercase animate-pulse">
-              Đang quét dữ liệu Google Places…
+            <p className="font-mono text-xs tracking-widest uppercase text-[#00FF94] animate-pulse">
+              {loadingMessage || "Đang xử lý..."} ({progress}%)
             </p>
           </div>
         )}

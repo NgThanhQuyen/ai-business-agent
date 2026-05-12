@@ -156,7 +156,7 @@ export default function SearchForm({ onSearch, loading }) {
                 <path className="opacity-75" fill="currentColor"
                   d="M4 12a8 8 0 018-8v8H4z" />
               </svg>
-              Đang phân tích
+              Đang xử lý...
             </span>
           ) : (
             "Tìm kiếm →"
