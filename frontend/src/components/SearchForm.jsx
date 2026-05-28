@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export default function SearchForm({ onSearch, loading }) {
+export default function SearchForm({ onSearchComplete, loading }) {
   const [keyword,  setKeyword]  = useState("");
   const [location, setLocation] = useState("");
   const [minRating, setMinRating] = useState("");
@@ -13,7 +13,7 @@ export default function SearchForm({ onSearch, loading }) {
     const parsedLimit = resultLimit.trim() ? Number(resultLimit) : undefined;
     const parsedRating = minRating.trim() ? Number(minRating) : undefined;
 
-    onSearch({
+    onSearchComplete({
       keyword: keyword.trim(),
       location: location.trim(),
       min_rating: Number.isFinite(parsedRating) ? parsedRating : undefined,

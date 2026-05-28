@@ -1,12 +1,15 @@
 # AI Business Agent
 
-AI Business Agent la ung dung full-stack ho tro tim kiem, lam sach va cham diem danh sach doanh nghiep tiem nang (lead generation) bang AI.
+Mô tả ngắn
+------------
+`AI Business Agent` là một prototype giúp thu thập dữ liệu doanh nghiệp địa phương (Google Places / SerpAPI), tiền xử lý, lưu vào DB và sử dụng Groq LLM để chấm điểm, sinh insight và hỗ trợ truy vấn bằng chat (Text-to-SQL agent).
 
-He thong ket hop:
-- Thu thap du lieu doanh nghiep tu Google Maps thong qua SerpAPI.
-- Xu ly va chuan hoa du lieu bang Pandas.
-- Cham diem lead va tao insight bang Groq LLM.
-- Hien thi ket qua qua dashboard React, ho tro xuat CSV/Excel.
+Tính năng chính
+--------------
+- Tìm kiếm doanh nghiệp theo từ khóa & vị trí (Google Places / SerpAPI)
+- Pipeline xử lý dữ liệu và chấm điểm với Groq LLM
+- Text-to-SQL agent: hỏi bằng ngôn ngữ tự nhiên → trả về kết quả từ DB
+- Giao diện frontend (React + Vite + Tailwind) để chat và hiển thị dashboard
 
 ## Highlights
 - Live business search theo `keyword` + `location`.

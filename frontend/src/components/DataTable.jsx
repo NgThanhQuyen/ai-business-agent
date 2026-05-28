@@ -35,7 +35,7 @@ const COLS = [
   { key: "ai_reason",    label: "Gợi ý AI"     },
 ];
 
-export default function DataTable({ businesses }) {
+export default function DataTable({ data }) {
   const [sortKey,  setSortKey]  = useState("rating");
   const [sortDir,  setSortDir]  = useState("desc");
   const [page,     setPage]     = useState(1);
@@ -43,12 +43,12 @@ export default function DataTable({ businesses }) {
 
   useEffect(() => {
     setPage(1);
-  }, [businesses]);
+  }, [data]);
 
-  if (!businesses?.length) return null;
+  if (!data?.length) return null;
 
   // Sort
-  const sorted = [...businesses].sort((a, b) => {
+  const sorted = [...data].sort((a, b) => {
     const av = a[sortKey] ?? (typeof a[sortKey] === "number" ? -Infinity : "");
     const bv = b[sortKey] ?? (typeof b[sortKey] === "number" ? -Infinity : "");
     if (av < bv) return sortDir === "asc" ? -1 :  1;
@@ -85,7 +85,7 @@ export default function DataTable({ businesses }) {
         <span className="font-display font-bold text-sm tracking-wide text-white/80">
           Kết quả
           <span className="ml-2 font-mono text-pulse text-xs">
-            [{businesses.length}]
+            [{data.length}]
           </span>
         </span>
         <span className="font-mono text-xs text-dim">

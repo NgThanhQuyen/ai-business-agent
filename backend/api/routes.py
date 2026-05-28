@@ -7,8 +7,16 @@ from sqlalchemy.orm import Session
 
 from database.db import get_db, SessionLocal
 from database.models import Business
-from database.schemas import SearchRequest, SearchResponse, BusinessOut, BusinessCreate
+from database.schemas import (
+    SearchRequest,
+    SearchResponse,
+    BusinessOut,
+    BusinessCreate,
+    ChatAgentRequest,
+    SmartChatResponse,
+)
 from services.data_pipeline import run_pipeline
+from services.smart_chat_service import process_smart_chat
 from database.redis_client import get_cache, set_cache, get_task_status, set_task_status
 
 router = APIRouter()
@@ -204,3 +212,13 @@ def clear_all_businesses(db: Session = Depends(get_db)):
     deleted_count = db.query(Business).delete()
     db.commit()
     return {"message": f"Deleted {deleted_count} business records."}
+
+
+# ── POST /chat-agent ─────────────────────────────────────────────────────────
+@router.post("/chat-agent", response_model=SmartChatResponse, status_code=status.HTTP_200_OK)
+def chat_agent(request: ChatAgentRequest, db: Session = Depends(get_db)):
+    try:
+        result = process_smart_chat(request.question, db)
+        return result
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal Server Error")

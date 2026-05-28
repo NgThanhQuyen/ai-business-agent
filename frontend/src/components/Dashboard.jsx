@@ -41,12 +41,12 @@ const StatCard = ({ label, value, accent = "#00FF94" }) => (
 );
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function buildRatingDist(businesses) {
+function buildRatingDist(data) {
   const buckets = {
     "< 3.0": 0, "3.0–3.9": 0,
     "4.0–4.4": 0, "4.5–4.9": 0, "5.0": 0, "Chưa có đánh giá": 0,
   };
-  businesses.forEach(({ rating }) => {
+  data.forEach(({ rating }) => {
     if (!rating)         buckets["Chưa có đánh giá"]++;
     else if (rating < 3) buckets["< 3.0"]++;
     else if (rating < 4) buckets["3.0–3.9"]++;
@@ -59,9 +59,9 @@ function buildRatingDist(businesses) {
     .map(([name, count]) => ({ name, count }));
 }
 
-function buildReviewBuckets(businesses) {
+function buildReviewBuckets(data) {
   const b = { "0": 0, "1–50": 0, "51–200": 0, "201–500": 0, "500+": 0 };
-  businesses.forEach(({ review_count: rc }) => {
+  data.forEach(({ review_count: rc }) => {
     if (!rc || rc === 0)   b["0"]++;
     else if (rc <= 50)     b["1–50"]++;
     else if (rc <= 200)    b["51–200"]++;
@@ -73,38 +73,38 @@ function buildReviewBuckets(businesses) {
     .map(([name, value]) => ({ name, value }));
 }
 
-function buildTop10(businesses) {
-  return [...businesses]
+function buildTop10(data) {
+  return [...data]
     .filter(b => b.review_count)
     .sort((a, b) => b.review_count - a.review_count)
     .slice(0, 10)
     .map(b => ({ name: b.name.length > 20 ? b.name.slice(0, 18) + "…" : b.name, reviews: b.review_count }));
 }
 
-function buildScatter(businesses) {
-  return businesses
+function buildScatter(data) {
+  return data
     .filter(b => b.rating && b.review_count)
     .map(b => ({ x: b.rating, y: b.review_count, name: b.name }));
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function Dashboard({ businesses }) {
-  if (!businesses?.length) return null;
+export default function Dashboard({ data }) {
+  if (!data?.length) return null;
 
-  const rated      = businesses.filter(b => b.rating);
+  const rated      = data.filter(b => b.rating);
   const avgRating  = rated.length
     ? (rated.reduce((s, b) => s + b.rating, 0) / rated.length).toFixed(2)
     : "Chưa có";
-  const totalReviews = businesses
+  const totalReviews = data
     .reduce((s, b) => s + (b.review_count || 0), 0)
     .toLocaleString();
-  const withWebsite = businesses.filter(b => b.website).length;
-  const websitePct  = Math.round((withWebsite / businesses.length) * 100);
+  const withWebsite = data.filter(b => b.website).length;
+  const websitePct  = Math.round((withWebsite / data.length) * 100);
 
-  const ratingDist   = buildRatingDist(businesses);
-  const reviewBuckets = buildReviewBuckets(businesses);
-  const top10        = buildTop10(businesses);
-  const scatterData  = buildScatter(businesses);
+  const ratingDist   = buildRatingDist(data);
+  const reviewBuckets = buildReviewBuckets(data);
+  const top10        = buildTop10(data);
+  const scatterData  = buildScatter(data);
 
   return (
     <div
@@ -121,7 +121,7 @@ export default function Dashboard({ businesses }) {
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard label="Tổng doanh nghiệp" value={businesses.length} accent="#00FF94" />
+        <StatCard label="Tổng doanh nghiệp" value={data.length} accent="#00FF94" />
         <StatCard label="Điểm trung bình"   value={avgRating}         accent="#A3E635" />
         <StatCard label="Tổng lượt đánh giá" value={totalReviews}      accent="#FACC15" />
         <StatCard label="Có trang web"      value={`${websitePct}%`}  accent="#818CF8" />

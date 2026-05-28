@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import List, Literal, Optional
 from datetime import datetime
 
 
@@ -43,3 +43,19 @@ class BusinessOut(BusinessBase):
 class SearchResponse(BaseModel):
     businesses: list[BusinessOut]
     insights: list[str]
+
+
+# ---------- Chat agent ----------
+class ChatAgentRequest(BaseModel):
+    question: str
+
+
+class ChatAgentResponse(BaseModel):
+    answer: str
+
+
+class SmartChatResponse(BaseModel):
+    ai_message: str
+    status: Literal["success_enough_data", "need_more_data"]
+    data: List[BusinessOut]
+    extracted_params: Optional[dict] = None
