@@ -9,6 +9,7 @@ export default function App() {
   const [showSearchForm, setShowSearchForm] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
   const [businesses, setBusinesses] = useState([]);
+  const [suggestedSearch, setSuggestedSearch] = useState(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -16,16 +17,34 @@ export default function App() {
   const [progress, setProgress] = useState(0);
   const [loadingMessage, setLoadingMessage] = useState("");
 
-  const handleChatResponse = (status, data) => {
+  const handleChatResponse = (response) => {
+    const status = response?.status;
+    const data = Array.isArray(response?.data) ? response.data : [];
+    const params = response?.extracted_params || {};
+    const searchPayload = params.search_payload || params;
+
     if (status === "need_more_data") {
+      setSuggestedSearch({
+        keyword: searchPayload.keyword || "",
+        location: searchPayload.location || "",
+        min_rating:
+          searchPayload.min_rating !== undefined && searchPayload.min_rating !== null
+            ? String(Number(searchPayload.min_rating) > 0 ? searchPayload.min_rating : "")
+            : "",
+        result_limit:
+          searchPayload.result_limit || searchPayload.limit
+            ? String(searchPayload.result_limit || searchPayload.limit)
+            : "",
+      });
+      setBusinesses([]);
       setShowSearchForm(true);
       setShowDashboard(false);
       return;
     }
 
     if (status === "success_enough_data") {
-      setBusinesses(Array.isArray(data) ? data : []);
-      setShowDashboard(true);
+      setBusinesses(data);
+      setShowDashboard(data.length > 0);
       setShowSearchForm(false);
     }
   };
@@ -34,6 +53,7 @@ export default function App() {
     setBusinesses(Array.isArray(data) ? data : []);
     setShowDashboard(true);
     setShowSearchForm(false);
+    setSuggestedSearch(null);
   };
 
   useEffect(() => {
@@ -118,7 +138,11 @@ export default function App() {
 
         {showSearchForm && (
           <div className="mt-10 animate-fade-up" style={{ animationDelay: "0.05s", opacity: 0 }}>
-            <SearchForm onSearchComplete={handleSearchRequest} loading={loading} />
+            <SearchForm
+              onSearchComplete={handleSearchRequest}
+              loading={loading}
+              initialValues={suggestedSearch}
+            />
 
             {loading && (
               <div className="mt-10 max-w-xl mx-auto flex flex-col items-center gap-4 text-dim">

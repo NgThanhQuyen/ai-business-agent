@@ -28,9 +28,8 @@ export default function ChatAgent({ onChatResponse }) {
 
     try {
       const response = await axiosClient.post("/api/chat-agent", { question });
-      const ai_text = response?.data?.ai_message;
-      const status = response?.data?.status;
-      const business_data = response?.data?.data;
+      const responseData = response?.data || {};
+      const ai_text = responseData.ai_message;
 
       // Use actual AI text from response (no fallback default)
       if (ai_text != null) {
@@ -40,7 +39,7 @@ export default function ChatAgent({ onChatResponse }) {
       }
 
       if (onChatResponse) {
-        onChatResponse(status, business_data);
+        onChatResponse(responseData);
       }
     } catch (err) {
       setMessages((prev) => [
