@@ -4,6 +4,8 @@ import {
   CartesianGrid,
 } from "recharts";
 
+import BusinessMap from "./BusinessMap";
+
 // ── Palette ───────────────────────────────────────────────────────────────────
 const COLORS = ["#00FF94", "#A3E635", "#FACC15", "#F87171", "#818CF8"];
 
@@ -88,7 +90,7 @@ function buildScatter(data) {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function Dashboard({ data }) {
+export default function Dashboard({ data, selectedBusinessId, onSelectBusiness }) {
   if (!data?.length) return null;
 
   const rated      = data.filter(b => b.rating);
@@ -229,6 +231,12 @@ export default function Dashboard({ data }) {
           </ResponsiveContainer>
         </ChartCard>
       </div>
+
+      <BusinessMap
+        data={data}
+        selectedBusinessId={selectedBusinessId}
+        onSelectBusiness={onSelectBusiness}
+      />
     </div>
   );
 }

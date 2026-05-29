@@ -9,6 +9,7 @@ export default function App() {
   const [showSearchForm, setShowSearchForm] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
   const [businesses, setBusinesses] = useState([]);
+  const [selectedBusinessId, setSelectedBusinessId] = useState(null);
   const [suggestedSearch, setSuggestedSearch] = useState(null);
 
   const [loading, setLoading] = useState(false);
@@ -44,13 +45,18 @@ export default function App() {
 
     if (status === "success_enough_data") {
       setBusinesses(data);
+      setSelectedBusinessId(data.find((item) => item.latitude != null && item.longitude != null)?.id ?? null);
       setShowDashboard(data.length > 0);
       setShowSearchForm(false);
     }
   };
 
   const handleSearchComplete = (data) => {
-    setBusinesses(Array.isArray(data) ? data : []);
+    const nextBusinesses = Array.isArray(data) ? data : [];
+    setBusinesses(nextBusinesses);
+    setSelectedBusinessId(
+      nextBusinesses.find((item) => item.latitude != null && item.longitude != null)?.id ?? null
+    );
     setShowDashboard(true);
     setShowSearchForm(false);
     setSuggestedSearch(null);
@@ -172,8 +178,16 @@ export default function App() {
 
         {showDashboard && (
           <div className="mt-12 animate-fade-up" style={{ animationDelay: "0.08s", opacity: 0 }}>
-            <Dashboard data={businesses} />
-            <DataTable data={businesses} />
+            <Dashboard
+              data={businesses}
+              selectedBusinessId={selectedBusinessId}
+              onSelectBusiness={setSelectedBusinessId}
+            />
+            <DataTable
+              data={businesses}
+              selectedBusinessId={selectedBusinessId}
+              onSelectBusiness={setSelectedBusinessId}
+            />
           </div>
         )}
       </div>

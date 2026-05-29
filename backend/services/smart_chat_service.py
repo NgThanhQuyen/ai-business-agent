@@ -130,6 +130,8 @@ def _fallback_keyword(question: str) -> str:
         "nhà hàng": ("nha hang", "restaurant"),
         "quán ăn": ("quan an",),
         "trà sữa": ("tra sua", "milk tea"),
+        "đồng hồ": ("dong ho", "watch", "watches"),
+        "vàng": ("vang", "gold", "jewelry", "jewellery"),
     }
     for keyword, aliases in keyword_aliases.items():
         if any(alias in normalized_question for alias in aliases):
@@ -147,6 +149,12 @@ def _keyword_match_terms(keyword: str) -> list[str]:
         "nha hang": ["nha hang", "restaurant"],
         "quan an": ["quan an"],
         "tra sua": ["tra sua", "milk tea", "milktea"],
+        "dong ho": ["dong ho", "watch", "watches"],
+        "tiem dong ho": ["dong ho", "watch", "watches"],
+        "cua hang dong ho": ["dong ho", "watch", "watches"],
+        "vang": ["vang", "gold", "jewelry", "jewellery"],
+        "tiem vang": ["vang", "gold", "jewelry", "jewellery"],
+        "cua hang vang": ["vang", "gold", "jewelry", "jewellery"],
     }
     return alias_map.get(normalized_keyword, [normalized_keyword])
 
@@ -172,7 +180,7 @@ def _fallback_location(question: str) -> str:
 def _requested_limit_from_question(question: str) -> int | None:
     normalized_question = _normalize_text(question)
     limit_patterns = (
-        r"\b(\d{1,3})\s*(?:quan|ket qua|dia diem|doanh nghiep|lead)\b",
+        r"\b(\d{1,3})\s*(?:quan|tiem|cua hang|shop|store|ket qua|dia diem|dia chi|doanh nghiep|lead)\b",
         r"\b(?:top|lay|tim|liet ke|hien thi|can)\s+(\d{1,3})\b",
     )
     for pattern in limit_patterns:

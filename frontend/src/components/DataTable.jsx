@@ -35,7 +35,7 @@ const COLS = [
   { key: "ai_reason",    label: "Gợi ý AI"     },
 ];
 
-export default function DataTable({ data }) {
+export default function DataTable({ data, selectedBusinessId, onSelectBusiness }) {
   const [sortKey,  setSortKey]  = useState("rating");
   const [sortDir,  setSortDir]  = useState("desc");
   const [page,     setPage]     = useState(1);
@@ -120,12 +120,18 @@ export default function DataTable({ data }) {
                 key={biz.id}
                 className="
                   border-b border-border/50 transition-colors duration-150
-                  hover:bg-pulse/5 group
+                  hover:bg-pulse/5 group cursor-pointer
                 "
+                onClick={() => onSelectBusiness?.(biz.id)}
                 style={{ animationDelay: `${i * 0.04}s` }}
+                aria-selected={selectedBusinessId === biz.id}
               >
                 {/* Name */}
-                <td className="px-4 py-3 font-semibold text-white/90 whitespace-normal break-words align-top">
+                <td
+                  className={`px-4 py-3 font-semibold whitespace-normal break-words align-top ${
+                    selectedBusinessId === biz.id ? "text-pulse" : "text-white/90"
+                  }`}
+                >
                   {biz.name}
                 </td>
 
