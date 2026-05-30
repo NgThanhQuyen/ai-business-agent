@@ -4,9 +4,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        display: ["Arial", "Helvetica", "sans-serif"],
-        body:    ["Arial", "Helvetica", "sans-serif"],
-        mono:    ["Consolas", "monospace"],
+        display: ["DM Sans", "sans-serif"],
+        body:    ["DM Sans", "sans-serif"],
+        mono:    ["DM Mono", "monospace"],
       },
       colors: {
         ink:   "#0D0D0D",

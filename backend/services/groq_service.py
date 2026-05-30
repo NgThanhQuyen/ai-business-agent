@@ -1,4 +1,5 @@
 import json
+from typing import Any
 from groq import Groq
 from core.config import settings
 
@@ -23,6 +24,35 @@ def _build_client() -> Groq | None:
 
 client = _build_client()
 
+def safe_groq_chat_completion(client: Groq, **kwargs) -> Any:
+    """
+    Executes a Groq chat completion call with automatic model fallback on rate limit or other API errors.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+    
+    requested_model = kwargs.pop("model", "llama-3.3-70b-versatile")
+    if requested_model in models:
+        models.remove(requested_model)
+    models.insert(0, requested_model)
+    
+    last_exc = None
+    for model in models:
+        try:
+            logger.info(f"Attempting Groq completion with model: {model}")
+            kwargs["model"] = model
+            return client.chat.completions.create(**kwargs)
+        except Exception as exc:
+            logger.warning(f"Groq API call failed with model {model}: {exc}")
+            last_exc = exc
+            continue
+            
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("All Groq models failed to execute completion.")
+
 def score_lead(business: dict) -> dict:
     """
     Score this business (0–100) based on:
@@ -40,7 +70,7 @@ def score_lead(business: dict) -> dict:
     - rating
     - review_count
     - có/không có website
-
+    
     Viết lý do ngắn gọn bằng tiếng Việt.
 
     Dữ liệu doanh nghiệp:
@@ -51,7 +81,8 @@ def score_lead(business: dict) -> dict:
     """
     
     try:
-        completion = client.chat.completions.create(
+        completion = safe_groq_chat_completion(
+            client=client,
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
@@ -99,7 +130,8 @@ def generate_insights(business_list: list[dict]) -> list[str]:
     """
     
     try:
-        completion = client.chat.completions.create(
+        completion = safe_groq_chat_completion(
+            client=client,
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
@@ -110,3 +142,4 @@ def generate_insights(business_list: list[dict]) -> list[str]:
     except Exception as e:
         print(f"Error generating insights: {e}")
         return ["Không thể tạo phân tích AI vào lúc này."]
+

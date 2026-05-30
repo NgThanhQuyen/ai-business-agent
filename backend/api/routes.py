@@ -15,9 +15,13 @@ from database.schemas import (
     ChatAgentRequest,
     SmartChatResponse,
 )
+import logging
 from services.data_pipeline import run_pipeline
 from services.smart_chat_service import process_smart_chat
 from database.redis_client import get_cache, set_cache, get_task_status, set_task_status
+from services.semantic_agent import run_semantic_search
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -38,6 +42,9 @@ def background_pipeline_task(task_id: str, payload: SearchRequest, cache_key: st
             return
 
         # ── Upsert into DB ─────────────────────────────────────────────────────
+        from services.serpapi_service import fetch_reviews_for_place
+        from services.semantic_agent import generate_embedding
+
         saved = []
         for record in clean_records:
             try:
@@ -54,6 +61,23 @@ def background_pipeline_task(task_id: str, payload: SearchRequest, cache_key: st
                 .first()
             )
 
+            # Get review_summary and embedding if needed
+            review_summary = None
+            embedding = None
+            if not existing or not existing.review_summary:
+                place_id = record.get("place_id")
+                data_id = record.get("data_id")
+                # Limit reviews fetching to top 15 results to manage API rate limit
+                if len(saved) < 15:
+                    logger.info(f"Fetching reviews for scraped business: {validated.name}")
+                    reviews = fetch_reviews_for_place(data_id, place_id)
+                    if reviews:
+                        review_summary = " | ".join(reviews)
+                        try:
+                            embedding = generate_embedding(review_summary)
+                        except Exception as emb_err:
+                            logger.error(f"Failed to generate embedding for {validated.name}: {emb_err}")
+
             if existing:
                 existing.phone        = validated.phone
                 existing.rating       = validated.rating
@@ -63,9 +87,15 @@ def background_pipeline_task(task_id: str, payload: SearchRequest, cache_key: st
                 existing.longitude    = validated.longitude
                 existing.ai_score     = validated.ai_score
                 existing.ai_reason    = validated.ai_reason
+                if review_summary:
+                    existing.review_summary = review_summary
+                    existing.embedding = embedding
                 saved.append(existing)
             else:
                 new_biz = Business(**validated.model_dump())
+                if review_summary:
+                    new_biz.review_summary = review_summary
+                    new_biz.embedding = embedding
                 db.add(new_biz)
                 saved.append(new_biz)
 
@@ -110,12 +140,12 @@ def search_businesses(payload: SearchRequest, background_tasks: BackgroundTasks)
     
     # 3. Xử lý khi Hit Cache
     if cached_data:
-        print("⚡ Hit Redis Cache!")
+        logger.info("Hit Redis Cache!")
         set_task_status(task_id, "completed", 100, "Hoàn tất! (Từ cache)", cached_data)
         return {"task_id": task_id, "message": "Task completed from cache"}
 
     # 4. Xử lý khi Miss Cache
-    print(f"🐌 Miss Cache, starting background task {task_id}...")
+    logger.info(f"Miss Cache, starting background task {task_id}...")
     set_task_status(task_id, "processing", 0, "Task started")
     background_tasks.add_task(background_pipeline_task, task_id, payload, cache_key)
 
@@ -218,7 +248,30 @@ def clear_all_businesses(db: Session = Depends(get_db)):
 @router.post("/chat-agent", response_model=SmartChatResponse, status_code=status.HTTP_200_OK)
 def chat_agent(request: ChatAgentRequest, db: Session = Depends(get_db)):
     try:
-        result = process_smart_chat(request.question, db)
+        # Check if query is a semantic search request starting with "/ai"
+        cleaned_question = request.question.strip() if request.question else ""
+        if cleaned_question.startswith("/ai"):
+            # Extract query text
+            if cleaned_question.startswith("/ai "):
+                query = cleaned_question[4:].strip()
+            else:
+                query = cleaned_question[3:].strip()
+            
+            logger.info(f"Triggering Semantic Vector Search with query: '{query}'")
+            try:
+                result = run_semantic_search(query, db)
+                return result
+            except Exception as semantic_err:
+                logger.warning(
+                    f"Semantic Search failed: {semantic_err}. Falling back to standard Text-to-SQL agent.",
+                    exc_info=True
+                )
+                # Fallback to Text-to-SQL
+                return process_smart_chat(request.question, db, context=request.context)
+        
+        # Standard Text-to-SQL flow
+        result = process_smart_chat(request.question, db, context=request.context)
         return result
-    except Exception:
+    except Exception as e:
+        logger.exception("Chat agent endpoint failed")
         raise HTTPException(status_code=500, detail="Internal Server Error")

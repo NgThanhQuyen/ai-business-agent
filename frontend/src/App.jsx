@@ -11,6 +11,7 @@ export default function App() {
   const [businesses, setBusinesses] = useState([]);
   const [selectedBusinessId, setSelectedBusinessId] = useState(null);
   const [suggestedSearch, setSuggestedSearch] = useState(null);
+  const [lastSmartChatContext, setLastSmartChatContext] = useState(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -23,6 +24,10 @@ export default function App() {
     const data = Array.isArray(response?.data) ? response.data : [];
     const params = response?.extracted_params || {};
     const searchPayload = params.search_payload || params;
+
+    if (Object.keys(params).length > 0) {
+      setLastSmartChatContext(params);
+    }
 
     if (status === "need_more_data") {
       setSuggestedSearch({
@@ -124,7 +129,7 @@ export default function App() {
         />
       </div>
 
-      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-14">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-14">
         <header className="mb-10 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-pulse/30 bg-pulse/10">
             <span className="w-2 h-2 rounded-full bg-pulse animate-pulse-dot" />
@@ -136,11 +141,11 @@ export default function App() {
             LeadSpy<span className="text-pulse">AI</span>
           </h1>
           <p className="mt-3 text-sm text-dim font-body max-w-xl mx-auto">
-            Dat cau hoi truoc, AI se dieu huong ban lay du lieu va dua ra thong ke nhanh.
+            Đặt câu hỏi trước, AI sẽ điều hướng bạn lấy dữ liệu và đưa ra thống kê nhanh.
           </p>
         </header>
 
-        <ChatAgent onChatResponse={handleChatResponse} />
+        <ChatAgent onChatResponse={handleChatResponse} chatContext={lastSmartChatContext} />
 
         {showSearchForm && (
           <div className="mt-10 animate-fade-up" style={{ animationDelay: "0.05s", opacity: 0 }}>
@@ -162,14 +167,14 @@ export default function App() {
                   />
                 </div>
                 <p className="font-mono text-xs tracking-widest uppercase text-[#00FF94] animate-pulse">
-                  {loadingMessage || "Dang xu ly..."} ({progress}%)
+                  {loadingMessage || "Đang xử lý..."} ({progress}%)
                 </p>
               </div>
             )}
 
             {error && !loading && (
               <div className="mt-6 max-w-xl mx-auto rounded-lg border border-red-500/30 bg-red-500/10 px-5 py-4">
-                <p className="font-mono text-xs text-red-400 uppercase tracking-wider mb-1">Loi</p>
+                <p className="font-mono text-xs text-red-400 uppercase tracking-wider mb-1">Lỗi</p>
                 <p className="font-body text-sm text-red-300">{error}</p>
               </div>
             )}

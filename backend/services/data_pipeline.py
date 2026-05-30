@@ -93,7 +93,8 @@ def to_records(df: pd.DataFrame) -> list[dict]:
     - Convert pandas NA → Python None so JSON serialisation works cleanly.
     """
     export_cols = ["name", "address", "phone", "rating",
-                   "review_count", "website", "latitude", "longitude"]
+                   "review_count", "website", "latitude", "longitude",
+                   "place_id", "data_id"]
 
     # Keep only columns that exist (guard against empty frames)
     existing = [c for c in export_cols if c in df.columns]
@@ -138,7 +139,7 @@ def run_pipeline(
         raw_records = search_businesses(keyword, location, max_results=100)
         if not raw_records:
             if task_id:
-                set_task_status(task_id, "completed", 100, "Không tìm thấy dữ liệu.", {"records": [], "insights": []})
+                set_task_status(task_id, "completed", 100, "Không tìm thấy dữ liệu.", {"businesses": [], "insights": []})
             return [], []
             
         if task_id:
@@ -166,7 +167,7 @@ def run_pipeline(
 
         if not clean_records:
             if task_id:
-                set_task_status(task_id, "completed", 100, "Không có dữ liệu sau khi lọc.", {"records": [], "insights": []})
+                set_task_status(task_id, "completed", 100, "Không có dữ liệu sau khi lọc.", {"businesses": [], "insights": []})
             return [], []
         
         if task_id:
@@ -185,7 +186,7 @@ def run_pipeline(
         insights = generate_insights(clean_records)
         
         if task_id:
-            set_task_status(task_id, "completed", 100, "Hoàn tất pipeline!", {"records": clean_records, "insights": insights})
+            set_task_status(task_id, "processing", 80, "Đang đồng bộ cơ sở dữ liệu và tải review...", {"records": clean_records, "insights": insights})
             
         return clean_records, insights
     except Exception as e:

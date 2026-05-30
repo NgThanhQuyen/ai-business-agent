@@ -15,6 +15,7 @@ from core.config import settings
 from database.db import engine
 from database.models import Business
 from database.schemas import BusinessOut, SmartChatResponse
+from services.groq_service import safe_groq_chat_completion
 
 
 logger = logging.getLogger(__name__)
@@ -162,12 +163,30 @@ def _keyword_match_terms(keyword: str) -> list[str]:
 def _fallback_location(question: str) -> str:
     normalized_question = _normalize_location_for_match(question)
     known_locations = {
-        "go vap": "Gò Vấp",
-        "binh thanh": "Bình Thạnh",
         "quan 1": "Quận 1",
+        "quan 2": "Quận 2",
         "quan 3": "Quận 3",
+        "quan 4": "Quận 4",
+        "quan 5": "Quận 5",
+        "quan 6": "Quận 6",
         "quan 7": "Quận 7",
+        "quan 8": "Quận 8",
+        "quan 9": "Quận 9",
+        "quan 10": "Quận 10",
+        "quan 11": "Quận 11",
+        "quan 12": "Quận 12",
+        "binh tan": "Bình Tân",
+        "binh thanh": "Bình Thạnh",
+        "go vap": "Gò Vấp",
+        "phu nhuan": "Phú Nhuận",
+        "tan binh": "Tân Bình",
+        "tan phu": "Tân Phú",
         "thu duc": "Thủ Đức",
+        "binh chanh": "Bình Chánh",
+        "can gio": "Cần Giờ",
+        "cu chi": "Củ Chi",
+        "hoc mon": "Hóc Môn",
+        "nha be": "Nhà Bè",
         "ho chi minh": "Hồ Chí Minh",
         "ha noi": "Hà Nội",
     }
@@ -232,10 +251,113 @@ def _fallback_intent(question: str) -> dict[str, Any]:
     }
 
 
+def _is_followup_question(question: str) -> bool:
+    normalized_question = _normalize_text(question)
+    followup_patterns = (
+        "do",
+        "do ra",
+        "cac quan do",
+        "nhung quan do",
+        "danh sach do",
+        "liet ke ra",
+        "liet ke",
+        "hien thi",
+        "hien thi ra",
+        "hien ra",
+        "xem nao",
+        "cho xem",
+        "cho toi xem",
+        "xem di",
+        "ra di",
+        "o tren",
+        "vua roi",
+        "luc nay",
+        "ket qua tren",
+        "danh sach tren",
+        "danh sach",
+        "show",
+        "list",
+    )
+    return any(pattern in normalized_question for pattern in followup_patterns)
+
+
+def _is_term_in_question(term: str, question: str) -> bool:
+    if not term:
+        return False
+    norm_term = _normalize_text(term)
+    norm_question = _normalize_text(question)
+    if not norm_term or not norm_question:
+        return False
+    
+    # 1. Direct substring check
+    if norm_term in norm_question:
+        return True
+        
+    # 2. Location aliases check
+    norm_loc_term = _normalize_location_for_match(term)
+    norm_loc_question = _normalize_location_for_match(question)
+    if norm_loc_term in norm_loc_question:
+        return True
+        
+    # 3. Keyword matching terms check
+    for matching_term in _keyword_match_terms(term):
+        if _normalize_text(matching_term) in norm_question:
+            return True
+            
+    return False
+
+
+def _context_search_params(context: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(context, dict):
+        return {}
+    search_payload = context.get("search_payload")
+    if isinstance(search_payload, dict):
+        return {**context, **search_payload}
+    return context
+
+
+def _merge_followup_context(intent: dict[str, Any], question: str, context: dict[str, Any] | None) -> dict[str, Any]:
+    if not _is_followup_question(question):
+        return intent
+
+    context_params = _context_search_params(context)
+    if not context_params:
+        return intent
+
+    merged = {**intent}
+
+    # Clean hallucinated keywords or locations that are not actually in the user's follow-up question
+    for key in ("keyword", "location"):
+        val = merged.get(key)
+        if val and not _is_term_in_question(val, question):
+            merged[key] = ""
+
+    for key in ("keyword", "location"):
+        if not merged.get(key) and context_params.get(key):
+            merged[key] = context_params[key]
+
+    if _safe_float(merged.get("min_rating")) == 0 and context_params.get("min_rating") is not None:
+        merged["min_rating"] = _safe_float(context_params.get("min_rating"))
+
+    requested_limit = _requested_limit_from_question(question)
+    if requested_limit is not None:
+        merged["limit"] = requested_limit
+    elif merged.get("type") == "list_data":
+        context_total = context_params.get("total_found")
+        if context_total is not None:
+            merged["limit"] = _safe_int(context_total, default=_safe_int(context_params.get("limit"), default=100))
+        elif context_params.get("limit") is not None:
+            merged["limit"] = _safe_int(context_params.get("limit"), default=100)
+
+    merged["followup_from_context"] = True
+    return merged
+
+
 def _classify_intent(question: str) -> dict[str, Any]:
     fallback = _fallback_intent(question)
     try:
-        completion = _get_groq_client().chat.completions.create(
+        completion = safe_groq_chat_completion(
+            client=_get_groq_client(),
             model="llama-3.1-8b-instant",
             messages=[{"role": "user", "content": f"{INTENT_PROMPT}\n\nCâu hỏi: {question}"}],
             temperature=0,
@@ -274,12 +396,19 @@ def _classify_intent(question: str) -> dict[str, Any]:
 
 def _build_sql_agent_answer(question: str) -> str:
     db = SQLDatabase(engine)
-    llm = ChatGroq(
+    primary_llm = ChatGroq(
         model_name="llama-3.3-70b-versatile",
         temperature=0,
         api_key=settings.GROQ_API_KEY,
         disable_streaming=True,
     )
+    fallback_llm_1 = ChatGroq(
+        model_name="llama-3.1-8b-instant",
+        temperature=0,
+        api_key=settings.GROQ_API_KEY,
+        disable_streaming=True,
+    )
+    llm = primary_llm.with_fallbacks([fallback_llm_1])
     toolkit = SQLDatabaseToolkit(db=db, llm=llm)
     agent_executor = create_sql_agent(
         llm=llm,
@@ -487,7 +616,7 @@ def _process_list_data(intent: dict[str, Any], question: str, db_session) -> dic
         else:
             ai_message = (
                 f"Dạ trong kho hiện có {total_found} kết quả phù hợp. "
-                f"Đủ yêu cầu {limit} kết quả của sếp, tôi hiển thị dashboard ngay:"
+                f"Đủ yêu cầu {limit} kết quả của bạn, tôi hiển thị dashboard ngay:"
             )
         response = SmartChatResponse(
             ai_message=ai_message,
@@ -500,8 +629,8 @@ def _process_list_data(intent: dict[str, Any], question: str, db_session) -> dic
     response = SmartChatResponse(
         ai_message=(
             f"Dạ trong kho hiện chỉ có {total_found} kết quả phù hợp, "
-            f"chưa đủ {limit} kết quả sếp yêu cầu. Tôi đã điền sẵn form bên dưới, "
-            "sếp bấm tìm kiếm để cào thêm từ Google Maps nhé!"
+            f"chưa đủ {limit} kết quả bạn yêu cầu. Tôi đã điền sẵn form bên dưới, "
+            "bạn bấm tìm kiếm để cào thêm từ Google Maps nhé!"
         ),
         status="need_more_data",
         data=[],
@@ -514,7 +643,7 @@ def _process_list_data(intent: dict[str, Any], question: str, db_session) -> dic
         response = SmartChatResponse(
             ai_message=(
                 f"Dạ trong kho hiện có {total_found} kết quả phù hợp. "
-                f"Đủ yêu cầu {limit} kết quả của sếp, tôi hiển thị dashboard ngay:"
+                f"Đủ yêu cầu {limit} kết quả của bạn, tôi hiển thị dashboard ngay:"
             ),
             status="success_enough_data",
             data=[BusinessOut.model_validate(business) for business in selected_businesses],
@@ -524,8 +653,8 @@ def _process_list_data(intent: dict[str, Any], question: str, db_session) -> dic
         response = SmartChatResponse(
             ai_message=(
                 f"Dạ trong kho hiện chỉ có {total_found} kết quả phù hợp, "
-                f"chưa đủ {limit} kết quả sếp yêu cầu. Tôi đã điền sẵn form bên dưới, "
-                "sếp bấm tìm kiếm để cào thêm từ Google Maps nhé!"
+                f"chưa đủ {limit} kết quả bạn yêu cầu. Tôi đã điền sẵn form bên dưới, "
+                "bạn bấm tìm kiếm để cào thêm từ Google Maps nhé!"
             ),
             status="need_more_data",
             data=[],
@@ -535,9 +664,72 @@ def _process_list_data(intent: dict[str, Any], question: str, db_session) -> dic
     return response.model_dump()
 
 
-def process_smart_chat(question: str, db_session) -> dict:
+def _is_request_to_open_search(question: str) -> bool:
+    normalized_question = _normalize_text(question)
+    open_patterns = (
+        "mo giao dien",
+        "mo form",
+        "mo tim kiem",
+        "tim kiem qua google map",
+        "tim kiem qua gg map",
+        "tim kiem google map",
+        "tim kiem gg map",
+        "mo trang tim",
+        "cao them",
+        "cao du lieu",
+        "cao data",
+        "mo giao dien cao",
+        "hien thi form",
+        "hien thi giao dien",
+        "mo google map",
+        "mo gg map",
+        "mo cong cu",
+        "crawl",
+        "scrape",
+        "lay them",
+        "nap them",
+        "bo sung du lieu",
+        "bo sung lead",
+        "bo sung o"
+    )
+    return any(pattern in normalized_question for pattern in open_patterns)
+
+
+def process_smart_chat(question: str, db_session, context: dict[str, Any] | None = None) -> dict:
     try:
         intent = _classify_intent(question)
+        intent = _merge_followup_context(intent, question, context)
+
+        if _is_request_to_open_search(question):
+            keyword = intent.get("keyword") or ""
+            location = intent.get("location") or ""
+            
+            context_params = _context_search_params(context)
+            if not keyword and context_params.get("keyword"):
+                keyword = context_params["keyword"]
+            if not location and context_params.get("location"):
+                location = context_params["location"]
+
+            extracted_params = {
+                "type": "list_data",
+                "keyword": keyword,
+                "location": location,
+                "min_rating": _safe_float(intent.get("min_rating"), default=0.0),
+                "limit": _safe_int(intent.get("limit"), default=100),
+                "search_payload": {
+                    "keyword": keyword,
+                    "location": location,
+                    "min_rating": _safe_float(intent.get("min_rating"), default=0.0),
+                    "result_limit": _safe_int(intent.get("limit"), default=100),
+                }
+            }
+            response = SmartChatResponse(
+                ai_message="Dạ bạn, tôi mở giao diện tìm kiếm và cào thêm dữ liệu từ Google Maps ngay bên dưới nhé!",
+                status="need_more_data",
+                data=[],
+                extracted_params=extracted_params
+            )
+            return response.model_dump()
 
         if intent["type"] == "count_or_analyze":
             answer = _answer_count_or_analyze(question, intent, db_session)
@@ -554,7 +746,7 @@ def process_smart_chat(question: str, db_session) -> dict:
     except Exception as exc:
         logger.exception("Smart chat processing failed")
         response = SmartChatResponse(
-            ai_message="Xin lỗi sếp, tôi gặp sự cố khi xử lý Smart Chat. Vui lòng thử lại sau.",
+            ai_message="Xin lỗi bạn, tôi gặp sự cố khi xử lý Smart Chat. Vui lòng thử lại sau.",
             status="need_more_data",
             data=[],
             extracted_params={"error": str(exc)},

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import axiosClient from "../api/axiosClient";
 
-export default function ChatAgent({ onChatResponse }) {
+export default function ChatAgent({ onChatResponse, chatContext }) {
   const [messages, setMessages] = useState([
     {
       sender: "ai",
-      text: "Chao ban, toi la AI Data Analyst. Ban muon thong ke hay hoi so lieu gi trong kho du lieu?",
+      text: "Chào bạn, tôi là AI Data Analyst. Bạn muốn thống kê hay hỏi số liệu gì trong kho dữ liệu?",
     },
   ]);
   const [input, setInput] = useState("");
@@ -27,15 +27,18 @@ export default function ChatAgent({ onChatResponse }) {
     setIsLoading(true);
 
     try {
-      const response = await axiosClient.post("/api/chat-agent", { question });
+      const response = await axiosClient.post("/api/chat-agent", {
+        question,
+        context: chatContext || null,
+      });
       const responseData = response?.data || {};
       const ai_text = responseData.ai_message;
 
-      // Use actual AI text from response (no fallback default)
+      // Use actual AI text from response
       if (ai_text != null) {
-        setMessages((prev) => [...prev, { sender: "ai", text: ai_text }] );
+        setMessages((prev) => [...prev, { sender: "ai", text: ai_text }]);
       } else {
-        setMessages((prev) => [...prev, { sender: "ai", text: "" }] );
+        setMessages((prev) => [...prev, { sender: "ai", text: "" }]);
       }
 
       if (onChatResponse) {
@@ -44,7 +47,7 @@ export default function ChatAgent({ onChatResponse }) {
     } catch (err) {
       setMessages((prev) => [
         ...prev,
-        { sender: "ai", text: "Xin lỗi sếp, hệ thống đang bận hoặc gặp sự cố kết nối." },
+        { sender: "ai", text: "Xin lỗi bạn, hệ thống đang bận hoặc gặp sự cố kết nối." },
       ]);
     } finally {
       setIsLoading(false);
@@ -59,65 +62,128 @@ export default function ChatAgent({ onChatResponse }) {
   };
 
   return (
-    <section className="mt-12 flex justify-center">
-      <div className="w-full max-w-4xl rounded-2xl border border-white/10 bg-slate-900/80 shadow-2xl backdrop-blur-xl">
-        <div className="px-8 pt-8 text-center">
+    <section className="mt-12 w-full">
+      <div className="w-full rounded-2xl border border-white/10 bg-slate-900/80 shadow-2xl backdrop-blur-xl overflow-hidden">
+        {/* Top Header Bar */}
+        <div className="px-8 py-6 border-b border-white/5 bg-slate-950/40">
           <h2 className="text-2xl font-display font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 via-lime-300 to-cyan-300">
-            🤖 AI Data Analyst - Chat voi CSDL
+            🤖 AI Data Analyst - Chat với CSDL
           </h2>
-          <p className="mt-2 text-sm font-mono text-dim">
-            Dat cau hoi tu nhien, AI se tu dong truy van CSDL.
+          <p className="mt-1 text-sm font-mono text-dim">
+            Đặt câu hỏi tự nhiên, AI sẽ tự động truy vấn CSDL.
           </p>
         </div>
 
-        <div
-          ref={scrollRef}
-          className="mt-6 max-h-60 overflow-y-auto px-8 pb-4 space-y-3"
-        >
-          {messages.map((msg, index) => (
+        {/* 7/3 Layout Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-10 divide-y lg:divide-y-0 lg:divide-x divide-white/10">
+          {/* Part 7: Chat Agent (7/10 col span) */}
+          <div className="lg:col-span-7 flex flex-col justify-between">
+            {/* Scrollable conversation log area */}
             <div
-              key={`${msg.sender}-${index}`}
-              className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
+              ref={scrollRef}
+              className="h-[450px] overflow-y-auto px-8 py-6 space-y-4"
             >
-              <div
-                className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-md ${
-                  msg.sender === "user"
-                    ? "bg-slate-800 text-white"
-                    : "border border-emerald-500/30 bg-emerald-500/5 text-emerald-200"
-                }`}
-              >
-                {msg.text}
-              </div>
+              {messages.map((msg, index) => (
+                <div
+                  key={`${msg.sender}-${index}`}
+                  className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-md ${
+                      msg.sender === "user"
+                        ? "bg-slate-800 text-white"
+                        : "border border-emerald-500/30 bg-emerald-500/5 text-emerald-200"
+                    }`}
+                  >
+                    <div className="whitespace-pre-line">{msg.text}</div>
+                  </div>
+                </div>
+              ))}
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm text-emerald-200 border border-emerald-500/30 bg-emerald-500/5">
+                    Đang xử lý...
+                  </div>
+                </div>
+              )}
             </div>
-          ))}
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="max-w-[80%] rounded-2xl px-4 py-3 text-sm text-emerald-200 border border-emerald-500/30 bg-emerald-500/5">
-                Dang xu ly...
-              </div>
-            </div>
-          )}
-        </div>
 
-        <div className="px-8 pb-8">
-          <div className="flex items-center gap-3">
-            <input
-              type="text"
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Nhap cau hoi ve du lieu..."
-              className="flex-1 rounded-full border border-white/10 bg-slate-900/70 px-6 py-4 text-lg text-white placeholder:text-slate-400 shadow-lg shadow-emerald-500/20 focus:outline-none focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-400/20"
-              disabled={isLoading}
-            />
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={isLoading || !input.trim()}
-              className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-6 py-4 text-sm font-semibold text-slate-900 shadow-lg shadow-emerald-500/20 transition-all hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Gui
-            </button>
+            {/* Message input area */}
+            <div className="px-8 pb-8 pt-4 border-t border-white/5 bg-slate-950/20">
+              <div className="flex items-center gap-3">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Nhập câu hỏi về dữ liệu..."
+                  className="flex-1 rounded-full border border-white/10 bg-slate-900/70 px-6 py-4 text-base text-white placeholder:text-slate-400 shadow-lg shadow-emerald-500/5 focus:outline-none focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-400/20"
+                  disabled={isLoading}
+                />
+                <button
+                  type="button"
+                  onClick={handleSend}
+                  disabled={isLoading || !input.trim()}
+                  className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-6 py-4 text-sm font-semibold text-slate-900 shadow-lg shadow-emerald-500/10 transition-all hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50 whitespace-nowrap"
+                >
+                  Gửi
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Part 3: Guide/Instructions Sidebar (3/10 col span) */}
+          <div className="lg:col-span-3 bg-slate-900/40 p-8 flex flex-col justify-between space-y-6">
+            <div>
+              <h3 className="text-base font-display font-bold text-white mb-4 flex items-center gap-2">
+                📖 Hướng dẫn sử dụng
+              </h3>
+              
+              <div className="space-y-5 text-sm leading-relaxed text-slate-300">
+                <div className="space-y-1">
+                  <p className="font-semibold text-emerald-300 flex items-center gap-1.5">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/20 text-xs">1</span>
+                    Tìm kiếm thông minh
+                  </p>
+                  <p className="text-xs text-slate-400 pl-6.5">
+                    Sử dụng cú pháp <code className="bg-slate-800 text-emerald-400 px-1.5 py-0.5 rounded font-mono">/ai</code> trước câu hỏi để tìm kiếm theo ngữ nghĩa và phân tích review bằng mô hình AI.
+                  </p>
+                  <p className="text-xs italic text-slate-500 pl-6.5">
+                    Ví dụ: <code className="bg-slate-800/50 text-slate-400 px-1 py-0.2 rounded font-mono">/ai quán cafe view đẹp, rộng rãi ở gò vấp</code>
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="font-semibold text-cyan-300 flex items-center gap-1.5">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan-500/20 text-xs">2</span>
+                    Cào dữ liệu Google Maps
+                  </p>
+                  <p className="text-xs text-slate-400 pl-6.5">
+                    Nhập các từ khóa chứa <code className="bg-slate-800 text-cyan-400 px-1.5 py-0.5 rounded font-mono">google map</code>, <code className="bg-slate-800 text-cyan-400 px-1.5 py-0.5 rounded font-mono">cào thêm</code>, hoặc <code className="bg-slate-800 text-cyan-400 px-1.5 py-0.5 rounded font-mono">tìm kiếm</code> để kích hoạt tính năng tự động cào dữ liệu mới từ Google Maps.
+                  </p>
+                  <p className="text-xs italic text-slate-500 pl-6.5">
+                    Ví dụ: <code className="bg-slate-800/50 text-slate-400 px-1 py-0.2 rounded font-mono">tìm kiếm google map các quán cà phê quận 1</code> hoặc <code className="bg-slate-800/50 text-slate-400 px-1 py-0.2 rounded font-mono">cào dữ liệu spa ở gò vấp</code>
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="font-semibold text-lime-300 flex items-center gap-1.5">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-lime-500/20 text-xs">3</span>
+                    Hỏi đáp dữ liệu SQL
+                  </p>
+                  <p className="text-xs text-slate-400 pl-6.5">
+                    Hỏi trực tiếp về số lượng, so sánh, phân tích các địa điểm trong cơ sở dữ liệu hiện tại mà không cần dùng cú pháp đặc biệt.
+                  </p>
+                  <p className="text-xs italic text-slate-500 pl-6.5">
+                    Ví dụ: <code className="bg-slate-800/50 text-slate-400 px-1 py-0.2 rounded font-mono">quán nào có điểm đánh giá cao nhất ở gò vấp?</code>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-white/5 text-[11px] font-mono text-slate-500">
+              Hệ thống tự động phát hiện ý định để truy vấn CSDL cục bộ hoặc mở rộng tìm kiếm trực tuyến khi cần thiết.
+            </div>
           </div>
         </div>
       </div>

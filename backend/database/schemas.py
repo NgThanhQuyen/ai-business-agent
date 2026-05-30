@@ -48,6 +48,7 @@ class SearchResponse(BaseModel):
 # ---------- Chat agent ----------
 class ChatAgentRequest(BaseModel):
     question: str
+    context: Optional[dict] = None
 
 
 class ChatAgentResponse(BaseModel):
