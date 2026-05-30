@@ -6,7 +6,7 @@ import {
 
 import BusinessMap from "./BusinessMap";
 
-// ── Palette ───────────────────────────────────────────────────────────────────
+// ── Bảng màu ───────────────────────────────────────────────────────────────────
 const COLORS = ["#00FF94", "#A3E635", "#FACC15", "#818CF8", "#F87171"];
 const GRADIENTS = [
   "url(#gradGreen)",
@@ -36,10 +36,10 @@ const tooltipLabelStyle = {
   fontWeight: "bold",
 };
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Thành phần con ────────────────────────────────────────────────────────────
 const ChartCard = ({ title, subtitle, children }) => (
   <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-slate-900/40 backdrop-blur-md p-6 shadow-xl transition-all duration-300 hover:border-white/10 hover:shadow-2xl hover:shadow-black/20 group">
-    {/* Background accent glow on hover */}
+    {/* Hiệu ứng hào quang nền khi di chuột qua */}
     <div className="pointer-events-none absolute -right-20 -top-20 w-48 h-48 rounded-full bg-[#00FF94]/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
     
     <p className="font-display font-bold text-base text-white tracking-wide mb-0.5">{title}</p>
@@ -53,7 +53,7 @@ const StatCard = ({ label, value, icon, accent = "#00FF94" }) => (
     className="relative overflow-hidden rounded-2xl border bg-slate-900/40 backdrop-blur-md p-6 flex flex-col gap-2 transition-all duration-300 hover:border-white/15 hover:shadow-[0_8px_30px_rgba(0,255,148,0.06)] hover:-translate-y-0.5 group"
     style={{ borderColor: `${accent}20` }}
   >
-    {/* Ambient gradient top bar */}
+    {/* Thanh gradient trên cùng làm điểm nhấn */}
     <div
       className="absolute top-0 left-0 w-full h-[3px] opacity-70 group-hover:opacity-100 transition-opacity duration-300"
       style={{ background: `linear-gradient(90deg, ${accent}, transparent)` }}
@@ -77,7 +77,7 @@ const StatCard = ({ label, value, icon, accent = "#00FF94" }) => (
   </div>
 );
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Hàm trợ giúp ───────────────────────────────────────────────────────────────────
 function buildRatingDist(data) {
   const buckets = {
     "< 3.0": 0, "3.0–3.9": 0,
@@ -124,7 +124,7 @@ function buildScatter(data) {
     .map(b => ({ x: b.rating, y: b.review_count, name: b.name }));
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
+// ── Thành phần chính ────────────────────────────────────────────────────────────
 export default function Dashboard({ data, selectedBusinessId, onSelectBusiness }) {
   if (!data?.length) return null;
 
@@ -148,7 +148,7 @@ export default function Dashboard({ data, selectedBusinessId, onSelectBusiness }
       className="animate-fade-up mt-10 space-y-6"
       style={{ animationDelay: "0.35s", opacity: 0 }}
     >
-      {/* Section label */}
+      {/* Nhãn phân đoạn */}
       <div className="flex items-center gap-3">
         <span className="font-display font-bold text-base text-white/80 tracking-wide">
           Bảng điều khiển phân tích
@@ -156,7 +156,7 @@ export default function Dashboard({ data, selectedBusinessId, onSelectBusiness }
         <div className="flex-1 h-px bg-border" />
       </div>
 
-      {/* Stat cards */}
+      {/* Thẻ chỉ số thống kê */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatCard
           label="Tổng doanh nghiệp"
@@ -205,10 +205,10 @@ export default function Dashboard({ data, selectedBusinessId, onSelectBusiness }
         />
       </div>
 
-      {/* Charts row 1 */}
+      {/* Hàng biểu đồ thứ nhất */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-        {/* Rating distribution bar chart */}
+        {/* Biểu đồ cột phân bổ điểm đánh giá */}
         <ChartCard title="Phân bổ điểm đánh giá" subtitle="Số doanh nghiệp theo từng mức điểm">
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={ratingDist} barCategoryGap="30%">
@@ -247,7 +247,7 @@ export default function Dashboard({ data, selectedBusinessId, onSelectBusiness }
           </ResponsiveContainer>
         </ChartCard>
 
-        {/* Review volume pie chart */}
+        {/* Biểu đồ tròn phân bổ số lượng review */}
         <ChartCard title="Phân bổ số lượng review" subtitle="Doanh nghiệp được nhóm theo số review">
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
@@ -265,7 +265,7 @@ export default function Dashboard({ data, selectedBusinessId, onSelectBusiness }
                   <Cell key={i} fill={COLORS[i % COLORS.length]} stroke="transparent" />
                 ))}
               </Pie>
-              {/* Central Summary inside Donut */}
+              {/* Tóm tắt ở tâm biểu đồ tròn (donut) */}
               <text x="50%" y="43%" textAnchor="middle" dominantBaseline="middle">
                 <tspan x="50%" dy="-2" fill="#9CA3AF" fontSize="10" fontFamily="DM Sans" fontWeight="600" letterSpacing="0.15em">TỔNG LEAD</tspan>
                 <tspan x="50%" dy="22" fill="#FFFFFF" fontSize="24" fontFamily="DM Sans" fontWeight="800">{data.length}</tspan>
@@ -281,10 +281,10 @@ export default function Dashboard({ data, selectedBusinessId, onSelectBusiness }
         </ChartCard>
       </div>
 
-      {/* Charts row 2 */}
+      {/* Hàng biểu đồ thứ hai */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-        {/* Top 10 by reviews */}
+        {/* Top 10 theo số review */}
         <ChartCard title="Top 10 theo số review" subtitle="Doanh nghiệp có nhiều review nhất">
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={top10} layout="vertical" barCategoryGap="30%">
@@ -306,7 +306,7 @@ export default function Dashboard({ data, selectedBusinessId, onSelectBusiness }
           </ResponsiveContainer>
         </ChartCard>
 
-        {/* Rating vs Reviews scatter */}
+        {/* Biểu đồ phân tán giữa số review và điểm đánh giá */}
         <ChartCard title="Tương quan điểm và số review" subtitle="Xác định nhóm nổi bật: điểm cao + nhiều review">
           <ResponsiveContainer width="100%" height={240}>
             <ScatterChart>

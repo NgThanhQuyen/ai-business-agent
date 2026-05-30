@@ -141,7 +141,7 @@ export default function App() {
             LeadSpy<span className="text-pulse">AI</span>
           </h1>
           <p className="mt-3 text-sm text-dim font-body max-w-xl mx-auto">
-            Đặt câu hỏi trước, AI sẽ điều hướng bạn lấy dữ liệu và đưa ra thống kê nhanh.
+            Trợ lý AI thế hệ mới: Tự động khai thác Google Maps, phân tích dữ liệu chuyên sâu và đề xuất kịch bản tiếp cận khách hàng tiềm năng.
           </p>
         </header>
 

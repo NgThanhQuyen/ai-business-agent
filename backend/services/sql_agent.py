@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def ask_database(user_question: str) -> str:
-    """Answer a natural-language question by querying the SQL database."""
+    """Trả lời câu hỏi ngôn ngữ tự nhiên bằng cách truy vấn cơ sở dữ liệu SQL."""
     try:
         db = SQLDatabase(engine)
 

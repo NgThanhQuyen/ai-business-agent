@@ -41,12 +41,12 @@ function MarkerFocus({ activePointId, markerRefs }) {
 
     const timeoutId = window.setTimeout(() => {
       try {
-        // marker from react-leaflet may be a ref object with `openPopup` on the instance
+        // marker từ react-leaflet có thể là một đối tượng ref có phương thức openPopup
         if (typeof marker.openPopup === "function") marker.openPopup();
         else if (marker?.current && typeof marker.current.openPopup === "function") marker.current.openPopup();
       } catch (err) {
-        // swallow to avoid crashing the map UI
-        // console.debug('Failed to open popup for marker', err);
+        // bỏ qua lỗi để tránh làm hỏng giao diện bản đồ
+        // console.debug('Không mở được popup cho marker', err);
       }
     }, 650);
 

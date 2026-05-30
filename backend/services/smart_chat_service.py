@@ -30,12 +30,14 @@ Schema:
   "keyword": "loại hình/tên quán/ngành, ví dụ cà phê, phở, nhà hàng; rỗng nếu không có",
   "location": "khu vực, ví dụ Gò Vấp, TPHCM, Hà Nội; rỗng nếu không có",
   "min_rating": số float, mặc định 0.0,
-  "limit": số nguyên user muốn, mặc định 100 nếu user không nói số
+  "limit": số nguyên user muốn, mặc định 100 nếu user không nói số,
+  "sort_by": "rating", "review_count", "ai_score" hoặc null nếu không yêu cầu sắp xếp cụ thể,
+  "sort_order": "desc" (cao nhất/tốt nhất/nhiều nhất/lớn nhất) hoặc "asc" (thấp nhất/kém nhất/ít nhất) hoặc null
 }
 
 Phân loại:
-- list_data: user muốn tìm/liệt kê/lấy danh sách để xem bảng, biểu đồ. Ví dụ: "Tìm cho tôi 20 quán cà phê trên 4.5 sao ở Gò Vấp".
-- count_or_analyze: user hỏi đếm, trung bình, so sánh, phân tích, cao nhất/thấp nhất. Ví dụ: "Có bao nhiêu quán cà phê ở Gò Vấp?".
+- list_data: user muốn tìm/liệt kê/lấy danh sách để xem bảng, biểu đồ. Ví dụ: "Tìm cho tôi 20 quán cà phê trên 4.5 sao ở Gò Vấp", "tìm 5 quán có rating cao nhất ở quận 1".
+- count_or_analyze: user hỏi đếm, trung bình, so sánh, phân tích. Ví dụ: "Có bao nhiêu quán cà phê ở Gò Vấp?".
 
 Quy tắc bắt buộc:
 - Nếu câu có "trên 4.5 sao", ">= 4 sao", "từ 4 sao" thì min_rating phải là số tương ứng.
@@ -123,6 +125,47 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
     return min(max(parsed, 0.0), 5.0)
 
 
+def _extract_keyword_regex(question: str) -> str:
+    # 1. Loại bỏ địa điểm ra khỏi câu hỏi
+    loc = _fallback_location(question)
+    cleaned = question.lower()
+    if loc:
+        cleaned = re.sub(rf"\b{re.escape(loc.lower())}\b", "", cleaned)
+        norm_loc = _normalize_location_for_match(loc)
+        cleaned = re.sub(rf"\b{re.escape(norm_loc)}\b", "", cleaned)
+
+    # Loại bỏ cả các tên quận huyện phổ biến khác
+    for l_key in ["gò vấp", "go vap", "quận 1", "quan 1", "quận 3", "quan 3", "thủ đức", "thu duc", "hồ chí minh", "ho chi minh", "hà nội", "ha noi", "tphcm", "hcm"]:
+        cleaned = re.sub(rf"\b{re.escape(l_key)}\b", "", cleaned)
+
+    # 2. Loại bỏ các từ dừng (stopwords) và tiếp vĩ ngữ phổ biến
+    stopwords = [
+        "có bao nhiêu", "bao nhiêu", "đếm", "tìm kiếm", "tìm", "lọc", "lấy", "hiển thị", "show", "list", "liệt kê", "danh sách",
+        "quán", "tiệm", "cửa hàng", "shop", "store", "nhà hàng", "restaurant",
+        "ở", "tại", "khu vực",
+        "cao nhất", "thấp nhất", "tốt nhất", "kém nhất", "nhiều nhất", "ít nhất", "lớn nhất", "nhỏ nhất",
+        "đánh giá", "review", "reviews", "rating", "sao", "star", "stars",
+        "trên", "từ", "dưới", "hơn", "trở lên", "phù hợp", "kết quả", "lead", "doanh nghiệp",
+        "của", "cho", "để", "với", "như", "yêu cầu", "được", "có", "top",
+        "ra xem", "cho xem", "cho tôi xem", "cho toi xem", "xem đi", "xem di", "xem nào", "xem nao", "xem",
+        "hiển thị ra", "hien thi ra", "hiện ra", "hien ra", "liệt kê ra", "liet ke ra", "đi ra", "di ra",
+        "đó", "do", "này", "nay", "vừa rồi", "vua roi", "lúc nãy", "luc nay", "trên", "tren", "ở trên", "o tren",
+        "danh sách", "danh sach", "danh sách trên", "danh sach tren", "kết quả trên", "ket qua tren", "xem sao"
+    ]
+    
+    stopwords.sort(key=len, reverse=True)
+    for word in stopwords:
+        cleaned = re.sub(rf"\b{re.escape(word)}\b", " ", cleaned)
+
+    # Loại bỏ các chữ số đơn lẻ
+    cleaned = re.sub(r"\b\d+\b", " ", cleaned)
+    
+    # Làm sạch khoảng trắng thừa
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    
+    return cleaned
+
+
 def _fallback_keyword(question: str) -> str:
     normalized_question = _normalize_text(question)
     keyword_aliases = {
@@ -133,11 +176,18 @@ def _fallback_keyword(question: str) -> str:
         "trà sữa": ("tra sua", "milk tea"),
         "đồng hồ": ("dong ho", "watch", "watches"),
         "vàng": ("vang", "gold", "jewelry", "jewellery"),
+        "mì quảng": ("mi quang", "my quang"),
+        "bún bò": ("bun bo",),
+        "hải sản": ("hai san", "seafood"),
+        "ốc": ("oc",),
+        "cơm tấm": ("com tam",),
     }
     for keyword, aliases in keyword_aliases.items():
         if any(alias in normalized_question for alias in aliases):
             return keyword
-    return ""
+            
+    # Nếu không khớp với bí danh nào, sử dụng biểu thức chính quy để trích xuất từ khóa
+    return _extract_keyword_regex(question)
 
 
 def _keyword_match_terms(keyword: str) -> list[str]:
@@ -156,6 +206,10 @@ def _keyword_match_terms(keyword: str) -> list[str]:
         "vang": ["vang", "gold", "jewelry", "jewellery"],
         "tiem vang": ["vang", "gold", "jewelry", "jewellery"],
         "cua hang vang": ["vang", "gold", "jewelry", "jewellery"],
+        "mi quang": ["mi quang", "my quang"],
+        "my quang": ["mi quang", "my quang"],
+        "mi": ["mi", "my"],
+        "my": ["mi", "my"],
     }
     return alias_map.get(normalized_keyword, [normalized_keyword])
 
@@ -229,6 +283,29 @@ def _fallback_min_rating(question: str) -> float:
     return 0.0
 
 
+def _parse_sort_params(question: str) -> tuple[str | None, str | None]:
+    norm = _normalize_text(question)
+    sort_by = None
+    sort_order = None
+    
+    if any(word in norm for word in ("cao nhat", "tot nhat", "nhieu nhat", "lon nhat", "highest", "best", "most")):
+        sort_order = "desc"
+    elif any(word in norm for word in ("thap nhat", "kem nhat", "it nhat", "nho nhat", "lowest", "worst", "least")):
+        sort_order = "asc"
+        
+    if any(word in norm for word in ("so review", "so luot review", "so luong review", "luot review", "luong review", "reviews", "review")):
+        sort_by = "review_count"
+    elif any(word in norm for word in ("danh gia", "rating", "sao", "star")):
+        sort_by = "rating"
+    elif any(word in norm for word in ("diem", "score", "ai score")):
+        sort_by = "ai_score"
+        
+    if "so danh gia" in norm or "luot danh gia" in norm or "so luong danh gia" in norm:
+        sort_by = "review_count"
+        
+    return sort_by, sort_order
+
+
 def _fallback_intent(question: str) -> dict[str, Any]:
     normalized_question = _normalize_text(question)
     count_patterns = (
@@ -241,13 +318,25 @@ def _fallback_intent(question: str) -> dict[str, Any]:
         "tot nhat",
         "kem nhat",
     )
-    intent_type = "count_or_analyze" if any(pattern in normalized_question for pattern in count_patterns) else "list_data"
+    list_patterns = ("tim", "show", "list", "liet ke", "hien thi", "loc", "lay", "tim kiem", "danh sach")
+    is_list_request = any(pattern in normalized_question for pattern in list_patterns)
+    
+    requested_limit = _requested_limit_from_question(question)
+    if requested_limit is not None and not any(p in normalized_question for p in ("bao nhieu", "dem", "trung binh")):
+        is_list_request = True
+        
+    intent_type = "count_or_analyze" if (any(pattern in normalized_question for pattern in count_patterns) and not is_list_request) else "list_data"
+    
+    sort_by, sort_order = _parse_sort_params(question)
+    
     return {
         "type": intent_type,
         "keyword": _fallback_keyword(question),
         "location": _fallback_location(question),
         "min_rating": _fallback_min_rating(question),
         "limit": _fallback_limit(question),
+        "sort_by": sort_by,
+        "sort_order": sort_order,
     }
 
 
@@ -289,17 +378,17 @@ def _is_term_in_question(term: str, question: str) -> bool:
     if not norm_term or not norm_question:
         return False
     
-    # 1. Direct substring check
+    # 1. Kiểm tra chuỗi con trực tiếp
     if norm_term in norm_question:
         return True
         
-    # 2. Location aliases check
+    # 2. Kiểm tra bí danh địa điểm
     norm_loc_term = _normalize_location_for_match(term)
     norm_loc_question = _normalize_location_for_match(question)
     if norm_loc_term in norm_loc_question:
         return True
         
-    # 3. Keyword matching terms check
+    # 3. Kiểm tra các thuật ngữ khớp với từ khóa
     for matching_term in _keyword_match_terms(term):
         if _normalize_text(matching_term) in norm_question:
             return True
@@ -326,7 +415,7 @@ def _merge_followup_context(intent: dict[str, Any], question: str, context: dict
 
     merged = {**intent}
 
-    # Clean hallucinated keywords or locations that are not actually in the user's follow-up question
+    # Loại bỏ các từ khóa hoặc địa điểm suy diễn sai lệch không thực sự có trong câu hỏi follow-up của người dùng
     for key in ("keyword", "location"):
         val = merged.get(key)
         if val and not _is_term_in_question(val, question):
@@ -379,11 +468,19 @@ def _classify_intent(question: str) -> dict[str, Any]:
         min_rating = fallback["min_rating"]
 
     if intent_type == "list_data":
-        # Use deterministic parsing for requested list size. LLMs often mistake
-        # district numbers like "Quận 1" for "limit = 1".
+        # Sử dụng phân tích cú pháp cố định cho giới hạn hiển thị. Các mô hình LLM thường nhầm lẫn
+        # số thứ tự quận như "Quận 1" thành tham số giới hạn "limit = 1".
         limit = fallback["limit"]
     else:
         limit = 100
+
+    sort_by = intent.get("sort_by") or fallback.get("sort_by")
+    sort_order = intent.get("sort_order") or fallback.get("sort_order")
+    
+    if sort_by not in {"rating", "review_count", "ai_score"}:
+        sort_by = None
+    if sort_order not in {"desc", "asc"}:
+        sort_order = None
 
     return {
         "type": intent_type,
@@ -391,6 +488,8 @@ def _classify_intent(question: str) -> dict[str, Any]:
         "location": _display_location(location) if location else "",
         "min_rating": min_rating,
         "limit": limit,
+        "sort_by": sort_by,
+        "sort_order": sort_order,
     }
 
 
@@ -445,17 +544,8 @@ Câu hỏi user: {question}
 
 def _rough_sqlalchemy_candidates(db_session, keyword: str, location: str) -> list[Business]:
     query = db_session.query(Business)
-    conditions = []
-
-    if keyword:
-        conditions.append(Business.name.ilike(f"%{keyword}%"))
-        for term in _keyword_match_terms(keyword):
-            conditions.append(Business.name.ilike(f"%{term}%"))
-        if hasattr(Business, "tags"):
-            conditions.append(Business.tags.ilike(f"%{keyword}%"))
-            for term in _keyword_match_terms(keyword):
-                conditions.append(Business.tags.ilike(f"%{term}%"))
-
+    
+    # 1. Áp dụng bộ lọc địa điểm (logic AND)
     if location:
         normalized_location = _normalize_location_for_match(location)
         location_variants = {
@@ -465,14 +555,23 @@ def _rough_sqlalchemy_candidates(db_session, keyword: str, location: str) -> lis
             "Hồ Chí Minh" if normalized_location == "ho chi minh" else "",
             "Hà Nội" if normalized_location == "ha noi" else "",
         }
-        for variant in {item for item in location_variants if item}:
-            conditions.append(Business.address.ilike(f"%{variant}%"))
-
-    if conditions:
-        rough_matches = query.filter(sa.or_(*conditions)).all()
-        if rough_matches:
-            return rough_matches
-
+        loc_conditions = [Business.address.ilike(f"%{variant}%") for variant in location_variants if variant]
+        if loc_conditions:
+            query = query.filter(sa.or_(*loc_conditions))
+            
+    # 2. Áp dụng bộ lọc từ khóa (logic AND)
+    if keyword:
+        kw_conditions = []
+        kw_conditions.append(Business.name.ilike(f"%{keyword}%"))
+        for term in _keyword_match_terms(keyword):
+            kw_conditions.append(Business.name.ilike(f"%{term}%"))
+        if hasattr(Business, "tags"):
+            kw_conditions.append(Business.tags.ilike(f"%{keyword}%"))
+            for term in _keyword_match_terms(keyword):
+                kw_conditions.append(Business.tags.ilike(f"%{term}%"))
+        if kw_conditions:
+            query = query.filter(sa.or_(*kw_conditions))
+            
     return query.all()
 
 
@@ -484,7 +583,15 @@ def _business_matches_query(business: Business, keyword: str, location: str, min
         keyword_terms = _keyword_match_terms(keyword)
         searchable_name = _normalize_text(business.name or "")
         searchable_tags = _normalize_text(getattr(business, "tags", "") or "")
-        if not any(term in searchable_name or term in searchable_tags for term in keyword_terms):
+        
+        # So khớp ranh giới từ sử dụng regex để tránh khớp chuỗi con không mong muốn (ví dụ: tránh từ "pho" khớp với "cellphones")
+        matched_term = False
+        for term in keyword_terms:
+            pattern = rf"\b{re.escape(term)}\b"
+            if re.search(pattern, searchable_name) or re.search(pattern, searchable_tags):
+                matched_term = True
+                break
+        if not matched_term:
             return False
 
     if location:
@@ -502,11 +609,26 @@ def _matching_businesses(intent: dict[str, Any], question: str, db_session) -> l
     location = intent.get("location") or _fallback_location(question)
     min_rating = _safe_float(intent.get("min_rating"))
     candidates = _rough_sqlalchemy_candidates(db_session, keyword, location)
-    return [
+    matched = [
         business
         for business in candidates
         if _business_matches_query(business, keyword, location, min_rating)
     ]
+    
+    sort_by = intent.get("sort_by")
+    sort_order = intent.get("sort_order") or "desc"
+    
+    if sort_by in {"rating", "review_count", "ai_score"}:
+        def get_sort_val(biz):
+            val = getattr(biz, sort_by)
+            if val is None:
+                return -99999999 if sort_order == "desc" else 99999999
+            return val
+            
+        reverse = (sort_order == "desc")
+        matched.sort(key=get_sort_val, reverse=reverse)
+        
+    return matched
 
 
 def _search_payload(intent: dict[str, Any], question: str, total_found: int) -> dict[str, Any]:
@@ -556,6 +678,13 @@ def _local_analysis_answer(question: str, intent: dict[str, Any], db_session) ->
         if scored:
             best = max(scored, key=lambda business: business.ai_score or 0)
             return f"Dạ quán có AI score cao nhất là {best.name} với {best.ai_score} điểm."
+
+    top_review_patterns = ("review cao", "review nhieu", "luot review", "luong review", "danh gia nhieu", "so review", "nhieu review")
+    if any(pattern in normalized_question for pattern in top_review_patterns) or "danh gia nhieu" in normalized_question or "nhieu danh gia" in normalized_question or "luot danh gia" in normalized_question:
+        reviewed = [business for business in businesses if business.review_count is not None]
+        if reviewed:
+            best = max(reviewed, key=lambda business: business.review_count or 0)
+            return f"Dạ quán có số lượng review cao nhất là {best.name} với {best.review_count} review."
 
     top_rating_patterns = ("rating cao", "danh gia cao", "sao cao", "cao nhat")
     if any(pattern in normalized_question for pattern in top_rating_patterns):
@@ -609,15 +738,53 @@ def _process_list_data(intent: dict[str, Any], question: str, db_session) -> dic
     extracted_params = _search_payload(intent, question, total_found)
     extracted_params["requested_limit_explicit"] = requested_limit is not None
 
+    sort_by = intent.get("sort_by")
+    sort_order = intent.get("sort_order") or "desc"
+
     if requested_limit is None or total_found >= limit:
         selected_businesses = matching_businesses[:limit]
-        if requested_limit is None:
-            ai_message = f"Dạ trong kho hiện có {total_found} kết quả phù hợp. Tôi hiển thị toàn bộ dữ liệu đang có:"
-        else:
+        if sort_by:
+            metric_names = {
+                "rating": "đánh giá (rating)",
+                "review_count": "số lượng review",
+                "ai_score": "điểm AI (AI score)"
+            }
+            order_names = {
+                "desc": "cao nhất",
+                "asc": "thấp nhất"
+            }
+            metric_name = metric_names.get(sort_by, "tiêu chí")
+            order_name = order_names.get(sort_order, "")
+            
+            shop_list_str = ""
+            for idx, biz in enumerate(selected_businesses):
+                val = getattr(biz, sort_by)
+                if sort_by == "rating":
+                    val_str = f"{val}/5 sao" if val is not None else "chưa có đánh giá"
+                elif sort_by == "review_count":
+                    val_str = f"{val} review" if val is not None else "0 review"
+                else:  # Điểm số AI (ai_score)
+                    val_str = f"{val} điểm" if val is not None else "chưa có điểm"
+                    
+                shop_list_str += f"\n{idx + 1}. **{biz.name}** - {val_str}"
+                if biz.address:
+                    shop_list_str += f" (Địa chỉ: {biz.address})"
+            
+            loc_str = f" ở {intent.get('location')}" if intent.get("location") else ""
             ai_message = (
-                f"Dạ trong kho hiện có {total_found} kết quả phù hợp. "
-                f"Đủ yêu cầu {limit} kết quả của bạn, tôi hiển thị dashboard ngay:"
+                f"Dạ, tôi tìm thấy {total_found} kết quả phù hợp{loc_str}. "
+                f"Dưới đây là danh sách {len(selected_businesses)} quán có {metric_name} {order_name} mà bạn yêu cầu:\n"
+                f"{shop_list_str}\n\n"
+                f"Tôi cũng đã đồng bộ và hiển thị đầy đủ thông tin chi tiết lên bản đồ cùng bảng dữ liệu ở bên dưới."
             )
+        else:
+            if requested_limit is None:
+                ai_message = f"Dạ trong kho hiện có {total_found} kết quả phù hợp. Tôi hiển thị toàn bộ dữ liệu đang có:"
+            else:
+                ai_message = (
+                    f"Dạ trong kho hiện có {total_found} kết quả phù hợp. "
+                    f"Đủ yêu cầu {limit} kết quả của bạn, tôi hiển thị dashboard ngay:"
+                )
         response = SmartChatResponse(
             ai_message=ai_message,
             status="success_enough_data",
@@ -636,31 +803,6 @@ def _process_list_data(intent: dict[str, Any], question: str, db_session) -> dic
         data=[],
         extracted_params=extracted_params,
     )
-    return response.model_dump()
-
-    if requested_limit is None or total_found >= limit:
-        selected_businesses = matching_businesses[:limit]
-        response = SmartChatResponse(
-            ai_message=(
-                f"Dạ trong kho hiện có {total_found} kết quả phù hợp. "
-                f"Đủ yêu cầu {limit} kết quả của bạn, tôi hiển thị dashboard ngay:"
-            ),
-            status="success_enough_data",
-            data=[BusinessOut.model_validate(business) for business in selected_businesses],
-            extracted_params=extracted_params,
-        )
-    else:
-        response = SmartChatResponse(
-            ai_message=(
-                f"Dạ trong kho hiện chỉ có {total_found} kết quả phù hợp, "
-                f"chưa đủ {limit} kết quả bạn yêu cầu. Tôi đã điền sẵn form bên dưới, "
-                "bạn bấm tìm kiếm để cào thêm từ Google Maps nhé!"
-            ),
-            status="need_more_data",
-            data=[],
-            extracted_params=extracted_params,
-        )
-
     return response.model_dump()
 
 

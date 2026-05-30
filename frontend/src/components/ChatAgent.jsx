@@ -5,7 +5,7 @@ export default function ChatAgent({ onChatResponse, chatContext }) {
   const [messages, setMessages] = useState([
     {
       sender: "ai",
-      text: "Chào bạn, tôi là AI Data Analyst. Bạn muốn thống kê hay hỏi số liệu gì trong kho dữ liệu?",
+      text: "Xin chào! Tôi là Trợ lý Phân tích & Tìm kiếm khách hàng tiềm năng AI. Bạn muốn tìm kiếm thông tin doanh nghiệp, cào dữ liệu Google Maps hay phân tích dữ liệu đối thủ hôm nay?",
     },
   ]);
   const [input, setInput] = useState("");
@@ -64,21 +64,21 @@ export default function ChatAgent({ onChatResponse, chatContext }) {
   return (
     <section className="mt-12 w-full">
       <div className="w-full rounded-2xl border border-white/10 bg-slate-900/80 shadow-2xl backdrop-blur-xl overflow-hidden">
-        {/* Top Header Bar */}
+        {/* Thanh tiêu đề trên cùng */}
         <div className="px-8 py-6 border-b border-white/5 bg-slate-950/40">
           <h2 className="text-2xl font-display font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 via-lime-300 to-cyan-300">
-            🤖 AI Data Analyst - Chat với CSDL
+            🤖 Trợ lý AI Phân tích & Khai phá Dữ liệu
           </h2>
           <p className="mt-1 text-sm font-mono text-dim">
-            Đặt câu hỏi tự nhiên, AI sẽ tự động truy vấn CSDL.
+            Hỏi đáp tự nhiên để truy vấn kho dữ liệu, tìm kiếm ngữ nghĩa hoặc kích hoạt cào dữ liệu Google Maps tự động.
           </p>
         </div>
 
-        {/* 7/3 Layout Grid */}
+        {/* Bố cục chia tỷ lệ 7/3 */}
         <div className="grid grid-cols-1 lg:grid-cols-10 divide-y lg:divide-y-0 lg:divide-x divide-white/10">
-          {/* Part 7: Chat Agent (7/10 col span) */}
+          {/* Phần 7: Khung trò chuyện AI (chiếm 7/10 cột) */}
           <div className="lg:col-span-7 flex flex-col justify-between">
-            {/* Scrollable conversation log area */}
+            {/* Khu vực cuộn hiển thị lịch sử trò chuyện */}
             <div
               ref={scrollRef}
               className="h-[450px] overflow-y-auto px-8 py-6 space-y-4"
@@ -108,7 +108,7 @@ export default function ChatAgent({ onChatResponse, chatContext }) {
               )}
             </div>
 
-            {/* Message input area */}
+            {/* Khu vực nhập câu hỏi của người dùng */}
             <div className="px-8 pb-8 pt-4 border-t border-white/5 bg-slate-950/20">
               <div className="flex items-center gap-3">
                 <input
@@ -116,7 +116,7 @@ export default function ChatAgent({ onChatResponse, chatContext }) {
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Nhập câu hỏi về dữ liệu..."
+                  placeholder="Nhập yêu cầu tìm kiếm, phân tích hoặc cào dữ liệu Google Maps..."
                   className="flex-1 rounded-full border border-white/10 bg-slate-900/70 px-6 py-4 text-base text-white placeholder:text-slate-400 shadow-lg shadow-emerald-500/5 focus:outline-none focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-400/20"
                   disabled={isLoading}
                 />
@@ -132,7 +132,7 @@ export default function ChatAgent({ onChatResponse, chatContext }) {
             </div>
           </div>
 
-          {/* Part 3: Guide/Instructions Sidebar (3/10 col span) */}
+          {/* Phần 3: Thanh bên hướng dẫn sử dụng (chiếm 3/10 cột) */}
           <div className="lg:col-span-3 bg-slate-900/40 p-8 flex flex-col justify-between space-y-6">
             <div>
               <h3 className="text-base font-display font-bold text-white mb-4 flex items-center gap-2">
@@ -182,7 +182,7 @@ export default function ChatAgent({ onChatResponse, chatContext }) {
             </div>
 
             <div className="pt-4 border-t border-white/5 text-[11px] font-mono text-slate-500">
-              Hệ thống tự động phát hiện ý định để truy vấn CSDL cục bộ hoặc mở rộng tìm kiếm trực tuyến khi cần thiết.
+              Hệ thống tự động nhận diện ý định để truy vấn SQL cục bộ, tìm kiếm Vector ngữ nghĩa (/ai) hoặc tự động kích hoạt pipeline cào dữ liệu Google Maps trực tuyến.
             </div>
           </div>
         </div>

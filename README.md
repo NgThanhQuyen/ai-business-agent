@@ -9,34 +9,37 @@
 ### 1. Pipeline Cào Dữ Liệu & Làm Sạch Tự Động
 - **Cào dữ liệu địa điểm**: Tích hợp SerpAPI Google Maps để thu thập thông tin doanh nghiệp (Tên, địa chỉ, số điện thoại, đánh giá, số lượng reviews, website, tọa độ GPS).
 - **Quy trình ETL với Pandas**: Tự động chuẩn hóa dữ liệu, xóa khoảng trắng thừa, điền giá trị thiếu và loại bỏ trùng lặp theo cặp `name + address`.
-- **Tải Review & Phân Tích**: Tự động quét và tải các review thực tế từ người dùng để làm cơ sở phân tích chất lượng.
+- **Tải Review thực tế**: Tự động quét và tải các review thực tế từ người dùng để làm cơ sở cho phân tích chất lượng ngữ nghĩa.
 
 ### 2. Tìm Kiếm Ngữ Nghĩa (/ai Semantic Search)
 - **Vector Embeddings cục bộ**: Sử dụng mô hình `keepitreal/vietnamese-sbert` để vector hóa các bản tóm tắt đánh giá thực tế của doanh nghiệp.
-- **Tìm kiếm tương đồng**: Thực hiện tìm kiếm khoảng cách Cosine trên PostgreSQL (hoặc fallback tính toán trực tiếp bằng Python-native) giúp tìm các doanh nghiệp khớp với các mô tả cảm quan (ví dụ: *"quán cà phê yên tĩnh để học bài"*, *"cửa hàng đồng hồ uy tín chính hãng"*).
-- **Tóm tắt thông tin trung thực**: Groq LLM đọc các review thực tế và tạo phản hồi tư vấn có trích dẫn rõ ràng, tuân thủ nghiêm ngặt nguyên tắc không bịa đặt thông tin (Anti-hallucination).
+- **Tìm kiếm tương đồng**: Thực hiện tìm kiếm khoảng cách Cosine trên PostgreSQL (hoặc dự phòng tính toán trực tiếp bằng Python-native) giúp tìm các doanh nghiệp khớp với các mô tả cảm quan (ví dụ: *"quán cà phê yên tĩnh để học bài"*, *"cửa hàng đồng hồ uy tín chính hãng"*).
+- **Tóm tắt thông tin trung thực**: Groq LLM đọc các review thực tế và tạo phản hồi tư vấn có trích dẫn rõ ràng, tuân thủ nghiêm ngặt nguyên tắc không tự bịa đặt thông tin (Anti-hallucination).
 
 ### 3. Trợ Lý SQL Ngôn Ngữ Tự Nhiên (SQL Agent)
-- **LangChain SQL Agent**: Cho phép người dùng trò chuyện, hỏi các câu hỏi thống kê phức tạp (ví dụ: *"Có bao nhiêu quán cafe trên 4.5 sao ở Gò Vấp?"*, *"Quán nào có AI score cao nhất?"*).
+- **LangChain SQL Agent**: Cho phép người dùng trò chuyện, hỏi các câu hỏi thống lai phức tạp (ví dụ: *"Có bao nhiêu quán cafe trên 4.5 sao ở Gò Vấp?"*, *"Quán nào có AI score cao nhất?"*).
 - **Tự động chuyển ngữ tự nhiên sang SQL**: Tự động sinh truy vấn SQL tối ưu trên CSDL PostgreSQL và trả về kết quả tiếng Việt ngắn gọn.
 
-### 4. Đánh Giá Chất Lượng Lead & Insights Chuyên Sâu
-- **Lead Scoring (0-100)**: Groq AI tự động chấm điểm chất lượng của từng lead dựa trên điểm đánh giá, số lượng review và việc có/không có website chính thức.
-- **Market Insights**: Tự động tổng hợp và đưa ra 3-5 phân tích chiến lược về tập dữ liệu đã cào để hỗ trợ hoạt động sales/telesales.
+### 4. So Sánh Đối Thủ Chi Tiết (Competitor Comparison)
+- **So sánh đối đầu**: Cho phép chọn chính xác 2 doanh nghiệp từ danh sách để tiến hành so sánh thông số và review thực tế.
+- **AI Agent phân tích**: Endpoint `/api/compare` sử dụng Groq LLM `llama-3.3-70b-versatile` để tổng hợp, liệt kê chi tiết tối đa 3 điểm mạnh, 3 điểm yếu của từng quán cùng phân tích đối chiến lược và phán quyết khuyên dùng của chuyên gia.
+- **Tự động cào review on-the-fly**: Nếu doanh nghiệp được chọn chưa có sẵn tóm tắt review trong DB, hệ thống tự động kích hoạt SerpAPI để cào thông tin review trực tiếp (hỗ trợ cả trường hợp redirect của single place result).
 
-### 5. Cơ Chế Dự Phòng Groq API (Model Fallback)
-- **Tự động chuyển đổi mô hình (Fallback 429)**: Khi mô hình chính `llama-3.3-70b-versatile` đạt giới hạn lượt dùng trong ngày (Rate Limit TPD), hệ thống sẽ tự động bắt lỗi và chuyển hướng cuộc gọi API sang mô hình dự phòng `llama-3.1-8b-instant`.
-- Cơ chế này cũng được tích hợp trực tiếp vào LangChain thông qua thuộc tính `.with_fallbacks()` cho SQL Agent, đảm bảo dịch vụ AI luôn hoạt động ổn định 24/7.
+### 5. Báo cáo PDF Tích Hợp Insights AI (PDF Market Report)
+- **AI Report Generator**: Endpoint `/api/report-insights` gọi Groq LLM phân tích tổng quan thị trường, tìm ra các cơ hội & khoảng trống (Market Gaps) và đề xuất 3 kịch bản Telesales phù hợp cho danh sách Lead.
+- **Hộp thoại (Modal) báo cáo trực quan**: Tích hợp số liệu thống kê chính, các biểu đồ phân bổ điểm đánh giá & review (Recharts), bảng Lead chi tiết và các nhận xét chiến lược từ AI.
+- **Hai chế độ xuất file PDF chuyên nghiệp**:
+  - **Tải PDF**: Client-side rendering sử dụng `html2pdf.js` (sửa lỗi lệch/trắng trang khi màn hình đang cuộn bằng cách ép gốc tọa độ scrollX/Y về 0).
+  - **In / Lưu PDF**: Tạo luồng tài liệu vector sắc nét, tự động mở hộp thoại in của hệ điều hành để lưu PDF chất lượng cao.
 
-### 6. Caching & Quản Lý Tiến Trình Thời Gian Thực
-- **Redis Cache**: Lưu trữ cache các kết quả cào và truy vấn để giảm độ trễ API và tiết kiệm chi phí SerpAPI.
-- **Hệ thống Task không đồng bộ**: Cập nhật tiến trình cào dữ liệu thời gian thực (%) hiển thị trên giao diện người dùng.
+### 6. Cơ Chế Quay Vòng API Keys (API Key Rotation) & Fallback
+- **Tự động xoay vòng khóa**: Cho phép nhập danh sách nhiều khóa API trong các biến `.env` (ngăn cách bằng dấu phẩy). Hệ thống tự động bắt các lỗi rate limit (429) hoặc sai khóa (401) để chuyển sang khóa tiếp theo của SerpAPI và Groq.
+- **Hạ cấp mô hình dự phòng (Model Fallback)**: Khi mô hình Groq chính gặp sự cố, hệ thống tự động hạ cấp xuống `llama-3.1-8b-instant` để tiếp tục thực hiện tác vụ mà không bị gián đoạn.
 
-### 7. Dashboard Hiện Đại & Trực Quan
-- Giao diện chia màn hình **7/3** tối ưu: 7 phần là khung chat & dữ liệu trực quan, 3 phần là hướng dẫn sử dụng chi tiết.
-- Hiển thị danh sách doanh nghiệp dưới dạng bảng tương tác và biểu đồ thống kê trực quan (Recharts).
-- Tích hợp bản đồ Leaflet đánh dấu các vị trí doanh nghiệp trực quan.
-- Hỗ trợ xuất dữ liệu ra file **CSV** hoặc **Excel** trực tiếp từ Dashboard.
+### 7. Dashboard Hiện Đại, Trực Quan & Việt Hóa Chú Thích
+- Giao diện chia màn hình **7/3** tối ưu với thiết kế Glassmorphism hiện đại, biểu đồ tương tác Recharts, bản đồ Leaflet ghim tọa độ thực địa.
+- Hỗ trợ xuất dữ liệu ra file **CSV** hoặc **Excel** tùy biến (cho phép tải toàn bộ hoặc lọc theo danh sách ID cụ thể).
+- **Việt hóa chú thích**: Toàn bộ chú thích mã nguồn trong các tệp `.py` và `.jsx` đều được Việt hóa có dấu chuẩn chỉ, không dùng icon/emoji, giúp mã nguồn luôn sạch đẹp, dễ bảo trì.
 
 ---
 
@@ -150,11 +153,16 @@ ai-business-agent/
 
 3. Tạo file cấu hình biến môi trường `backend/.env` với nội dung:
    ```env
-   DB_URL=postgresql://postgres:yourpassword@localhost:5432/ai_leads_db
-   SERPAPI_KEY=your_serpapi_api_key
-   GROQ_API_KEY=your_groq_api_key
-   REDIS_HOST=localhost
-   REDIS_PORT=6379
+    # Cấu hình CSDL PostgreSQL
+    DB_URL=postgresql://postgres:yourpassword@localhost:5432/ai_leads_db
+    
+    # Hỗ trợ danh sách API Keys phân tách bằng dấu phẩy để tự động quay vòng khi hết hạn mức
+    SERPAPI_KEY=serpapi_key1,serpapi_key2
+    GROQ_API_KEY=groq_key1,groq_key2
+    
+    # Cấu hình Redis
+    REDIS_HOST=localhost
+    REDIS_PORT=6379
    ```
 
 4. Khởi tạo cơ sở dữ liệu và sinh vector embeddings mẫu cho reviews thực tế:
@@ -203,7 +211,9 @@ ai-business-agent/
 | **GET** | `/api/tasks/{task_id}` | Kiểm tra trạng thái (%) và kết quả của tác vụ cào dữ liệu từ Redis. |
 | **POST** | `/api/chat-agent` | Điểm nhận tin nhắn chat (Tự động định tuyến tìm kiếm ngữ nghĩa `/ai` hoặc SQL Agent). |
 | **GET** | `/api/businesses` | Lấy danh sách toàn bộ doanh nghiệp đang được lưu trữ trong CSDL. |
-| **GET** | `/api/export?format=csv\|excel` | Trích xuất toàn bộ cơ sở dữ liệu doanh nghiệp và tải về dưới dạng file CSV/Excel. |
+| **GET** | `/api/export?format=csv\|excel&ids=1,2` | Trích xuất toàn bộ hoặc theo danh sách ID doanh nghiệp và tải về dưới dạng file CSV/Excel. |
+| **POST** | `/api/compare` | So sánh đối đầu chi tiết 2 đối thủ cạnh tranh bằng AI Agent. |
+| **POST** | `/api/report-insights` | Tạo insights báo cáo phân tích thị trường tổng quan và đề xuất telesales. |
 | **DELETE** | `/api/businesses` | Xóa sạch dữ liệu doanh nghiệp trong cơ sở dữ liệu để cào mới. |
 
 ---

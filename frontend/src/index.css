@@ -53,3 +53,11 @@ body {
 .business-map-marker__core--active {
   background: linear-gradient(180deg, #a3e635 0%, #00ff94 100%);
 }
+
+@media print {
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+}
+

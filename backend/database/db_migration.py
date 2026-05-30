@@ -3,7 +3,7 @@ import os
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-# Add backend directory to path
+# Thêm đường dẫn thư mục backend vào sys.path để import các module nội bộ
 backend_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(backend_path)
 
@@ -15,7 +15,7 @@ from sentence_transformers import SentenceTransformer
 def run_migration():
     print("🚀 Starting Database Migration...")
     
-    # 1. Check pgvector availability
+    # 1. Kiểm tra xem tiện ích mở rộng pgvector (vector) có sẵn trong PostgreSQL không
     has_pgvector = False
     try:
         with engine.connect() as conn:
@@ -32,20 +32,20 @@ def run_migration():
         print(f"⚠️ Error checking/enabling pgvector extension: {e}")
         print("We will fall back to TEXT column for embeddings.")
 
-    # 2. Add columns if they do not exist
+    # 2. Thêm các cột cần thiết vào bảng businesses nếu chưa tồn tại
     try:
         with engine.connect() as conn:
-            # Add review_summary
+            # Thêm cột review_summary để lưu trữ tóm tắt đánh giá
             try:
                 conn.execute(text("ALTER TABLE businesses ADD COLUMN review_summary TEXT;"))
                 conn.commit()
                 print("✅ Added column 'review_summary' (TEXT).")
             except Exception as e:
-                # Column might already exist
+                # Cột có thể đã tồn tại từ trước
                 conn.rollback()
                 print("ℹ️ Column 'review_summary' already exists or could not be added.")
 
-            # Add embedding
+            # Thêm cột embedding để phục vụ tìm kiếm vector ngữ nghĩa
             if has_pgvector:
                 try:
                     conn.execute(text("ALTER TABLE businesses ADD COLUMN embedding vector(768);"))
@@ -53,7 +53,7 @@ def run_migration():
                     print("✅ Added column 'embedding' (vector(768)).")
                 except Exception as e:
                     conn.rollback()
-                    # Check if it exists with different type
+                    # Kiểm tra xem cột đã tồn tại với kiểu dữ liệu khác chưa
                     print("ℹ️ Column 'embedding' already exists or could not be added as vector(768).")
             else:
                 try:
@@ -67,7 +67,7 @@ def run_migration():
         print(f"❌ Migration columns addition failed: {e}")
         sys.exit(1)
 
-    # 3. Populate missing embeddings for existing records that have real reviews
+    # 3. Tạo vector embedding bổ sung cho những bản ghi cũ đã có tóm tắt đánh giá thực tế
     db = SessionLocal()
     try:
         businesses = db.query(Business).filter(Business.review_summary.isnot(None), Business.embedding.is_(None)).all()
@@ -77,7 +77,7 @@ def run_migration():
 
         print(f"ℹ️ Found {len(businesses)} businesses needing embeddings. Generating...")
         
-        # Load local embedding model
+        # Tải mô hình sinh embedding cục bộ
         model_name = "keepitreal/vietnamese-sbert"
         print(f"⚡ Loading embedding model '{model_name}'... (This may take a moment on first run)")
         model = SentenceTransformer(model_name)

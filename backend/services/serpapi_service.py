@@ -27,11 +27,71 @@ def clean_and_localize_location(location_str: str) -> str:
     if "vietnam" not in loc_lower and "việt nam" not in loc_lower:
         return f"{location_str}, Việt Nam"
     return location_str
+def get_all_serpapi_keys() -> list[str]:
+    keys = []
+    # 1. Thử lấy danh sách API keys từ settings.SERPAPI_KEYS (ngăn cách bằng dấu phẩy)
+    if hasattr(settings, "SERPAPI_KEYS") and settings.SERPAPI_KEYS:
+        for k in settings.SERPAPI_KEYS.split(","):
+            val = k.strip()
+            if val and val not in keys:
+                keys.append(val)
+                
+    # 2. Thử lấy từ settings.SERPAPI_KEY
+    if settings.SERPAPI_KEY:
+        for k in settings.SERPAPI_KEY.split(","):
+            val = k.strip()
+            if val and val not in keys:
+                keys.append(val)
+        
+    return keys
+
+
+def safe_serpapi_search(params: dict) -> dict:
+    """
+    Thực hiện truy vấn SerpAPI sử dụng GoogleSearch.
+    Hỗ trợ cơ chế tự động quay vòng API keys khi có key bị giới hạn lượt gọi (rate limit) hoặc lỗi.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    keys = get_all_serpapi_keys()
+    if not keys:
+        raise RuntimeError("No SerpAPI keys configured. Please configure SERPAPI_KEY or SERPAPI_KEYS.")
+        
+    last_error_msg = ""
+    for k in keys:
+        try:
+            # Ẩn bớt ký tự API key để đảm bảo an toàn bảo mật khi ghi log
+            masked_key = k[:10] + "..." if k else "None"
+            logger.info(f"Attempting SerpAPI query with key: {masked_key} on engine: {params.get('engine')}")
+            
+            # Sao chép tham số để tránh thay đổi trực tiếp trên dictionary gốc truyền vào
+            query_params = dict(params)
+            query_params["api_key"] = k
+            
+            search = GoogleSearch(query_params)
+            results = search.get_dict()
+            
+            # Nếu kết quả phản hồi chứa lỗi, ném ra ngoại lệ để chuyển sang thử key tiếp theo
+            if "error" in results:
+                err_msg = results["error"]
+                logger.warning(f"SerpAPI returned error using key {masked_key}: {err_msg}")
+                last_error_msg = err_msg
+                continue
+                
+            return results
+        except Exception as e:
+            logger.warning(f"SerpAPI query failed using key {k[:10]}...: {e}")
+            last_error_msg = str(e)
+            continue
+            
+    raise RuntimeError(f"All SerpAPI keys failed to execute query. Last error: {last_error_msg}")
+
 
 def search_businesses(keyword: str, location: str, max_results: int = 100) -> list[dict]:
     """
-    Search for businesses using Google Maps with SerpAPI.
-    Attempts pagination via `start` to collect up to `max_results`.
+    Tìm kiếm các doanh nghiệp sử dụng Google Maps thông qua SerpAPI.
+    Sử dụng phân trang (start) để thu thập đủ số lượng kết quả yêu cầu.
     """
     max_results = max(1, min(max_results, 100))
 
@@ -45,13 +105,34 @@ def search_businesses(keyword: str, location: str, max_results: int = 100) -> li
         params = {
             "engine": "google_maps",
             "q": f"{keyword} in {localized_location}",
-            "api_key": settings.SERPAPI_KEY,
             "type": "search",
             "start": start,
         }
 
-        search = GoogleSearch(params)
-        results = search.get_dict()
+        try:
+            results = safe_serpapi_search(params)
+        except Exception as err:
+            import logging
+            logging.getLogger(__name__).error(f"SerpAPI search failed: {err}")
+            break
+
+        if "place_results" in results:
+            place = results["place_results"]
+            gps = place.get("gps_coordinates", {})
+            businesses.append({
+                "name": place.get("title"),
+                "address": place.get("address"),
+                "phone": place.get("phone"),
+                "rating": place.get("rating"),
+                "review_count": place.get("reviews"),
+                "website": place.get("website"),
+                "latitude": gps.get("latitude"),
+                "longitude": gps.get("longitude"),
+                "place_id": place.get("place_id"),
+                "data_id": place.get("data_id"),
+            })
+            break
+
         local_results = results.get("local_results", [])
         if not local_results:
             break
@@ -81,7 +162,7 @@ def search_businesses(keyword: str, location: str, max_results: int = 100) -> li
             if len(businesses) >= max_results:
                 break
 
-        # Prevent infinite loops if pagination returns duplicates.
+        # Ngăn chặn vòng lặp vô hạn nếu phân trang trả về kết quả trùng lặp hoặc hết trang dữ liệu.
         if added_this_page == 0 or len(local_results) < 20:
             break
 
@@ -91,27 +172,25 @@ def search_businesses(keyword: str, location: str, max_results: int = 100) -> li
 
 def fetch_reviews_for_place(data_id: str, place_id: str = None) -> list[str]:
     """
-    Fetch up to 5 real reviews for a place using SerpAPI.
+    Thu thập tối đa 5 đánh giá thực tế từ người dùng cho một địa điểm thông qua SerpAPI.
     """
     if not data_id and not place_id:
         return []
     try:
         params = {
             "engine": "google_maps_reviews",
-            "api_key": settings.SERPAPI_KEY,
         }
         if data_id:
             params["data_id"] = data_id
         else:
             params["place_id"] = place_id
             
-        search = GoogleSearch(params)
-        results = search.get_dict()
+        results = safe_serpapi_search(params)
         reviews_data = results.get("reviews", [])
         
         review_texts = []
         for r in reviews_data:
-            text = r.get("text")
+            text = r.get("snippet") or r.get("text")
             if text and len(text.strip()) >= 15:
                 review_texts.append(text.strip().replace("\n", " "))
         return review_texts[:5]

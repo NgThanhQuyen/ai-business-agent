@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# ── Background Task Wrapper ──────────────────────────────────────────────────
+# Hàm chạy tiến trình ngầm (Background Task Wrapper)
 def background_pipeline_task(task_id: str, payload: SearchRequest, cache_key: str):
     db = SessionLocal()
     try:
@@ -38,10 +38,10 @@ def background_pipeline_task(task_id: str, payload: SearchRequest, cache_key: st
         )
 
         if not clean_records:
-            # If data pipeline already updated task status to completed (no data), do nothing else
+            # Nếu pipeline dữ liệu đã cập nhật trạng thái tác vụ thành hoàn thành (không có dữ liệu), không làm gì thêm
             return
 
-        # ── Upsert into DB ─────────────────────────────────────────────────────
+        # Thực hiện cập nhật hoặc thêm mới dữ liệu vào database (Upsert)
         from services.serpapi_service import fetch_reviews_for_place
         from services.semantic_agent import generate_embedding
 
@@ -61,13 +61,13 @@ def background_pipeline_task(task_id: str, payload: SearchRequest, cache_key: st
                 .first()
             )
 
-            # Get review_summary and embedding if needed
+            # Lấy review_summary và embedding nếu cần thiết
             review_summary = None
             embedding = None
             if not existing or not existing.review_summary:
                 place_id = record.get("place_id")
                 data_id = record.get("data_id")
-                # Limit reviews fetching to top 15 results to manage API rate limit
+                # Giới hạn việc lấy review cho top 15 kết quả để quản lý rate limit của API
                 if len(saved) < 15:
                     logger.info(f"Fetching reviews for scraped business: {validated.name}")
                     reviews = fetch_reviews_for_place(data_id, place_id)
@@ -113,7 +113,7 @@ def background_pipeline_task(task_id: str, payload: SearchRequest, cache_key: st
             insights=insights
         )
         
-        # 5. Lưu vào cache trước khi trả về
+        # 5. Lưu kết quả vào bộ nhớ đệm cache trước khi trả về
         set_cache(cache_key, response_data.model_dump())
         set_task_status(task_id, "completed", 100, "Hoàn tất!", response_data.model_dump())
     except Exception as exc:
@@ -122,7 +122,7 @@ def background_pipeline_task(task_id: str, payload: SearchRequest, cache_key: st
         db.close()
 
 
-# ── POST /search ──────────────────────────────────────────────────────────────
+# Endpoint POST /search - Khởi chạy tiến trình tìm kiếm dữ liệu và chấm điểm
 @router.post("/search", status_code=status.HTTP_202_ACCEPTED)
 def search_businesses(payload: SearchRequest, background_tasks: BackgroundTasks):
     """
@@ -132,26 +132,26 @@ def search_businesses(payload: SearchRequest, background_tasks: BackgroundTasks)
     """
     task_id = str(uuid.uuid4())
     
-    # 1. Tạo cache_key duy nhất (chuyển về lowercase)
+    # 1. Tạo khóa cache (cache key) duy nhất từ tham số tìm kiếm và chuyển về chữ thường
     cache_key = f"search:{payload.keyword}_{payload.location}_{payload.min_rating}_{payload.result_limit}".lower()
     
-    # 2. Kiểm tra cache
+    # 2. Kiểm tra dữ liệu trong bộ nhớ cache Redis
     cached_data = get_cache(cache_key)
     
-    # 3. Xử lý khi Hit Cache
+    # 3. Xử lý khi dữ liệu đã có sẵn trong cache (Hit Cache)
     if cached_data:
         logger.info("Hit Redis Cache!")
         set_task_status(task_id, "completed", 100, "Hoàn tất! (Từ cache)", cached_data)
         return {"task_id": task_id, "message": "Task completed from cache"}
 
-    # 4. Xử lý khi Miss Cache
+    # 4. Xử lý khi chưa có dữ liệu trong cache (Miss Cache)
     logger.info(f"Miss Cache, starting background task {task_id}...")
     set_task_status(task_id, "processing", 0, "Task started")
     background_tasks.add_task(background_pipeline_task, task_id, payload, cache_key)
 
     return {"task_id": task_id, "message": "Task started"}
 
-# ── GET /tasks/{task_id} ──────────────────────────────────────────────────────
+# Endpoint GET /tasks/{task_id} - Lấy trạng thái tiến trình chạy ngầm
 @router.get("/tasks/{task_id}", status_code=status.HTTP_200_OK)
 def get_task(task_id: str):
     """
@@ -163,16 +163,26 @@ def get_task(task_id: str):
     return task_data
 
 
-# ── GET /export ───────────────────────────────────────────────────────────────
+# Endpoint GET /export - Xuất danh sách doanh nghiệp ra file CSV hoặc Excel
 @router.get("/export", status_code=status.HTTP_200_OK)
 def export_businesses(
     format: str = Query(default="csv", pattern="^(csv|excel)$"),
+    ids: str = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """
-    Fetch all businesses from DB and return CSV or Excel download.
+    Fetch all businesses from DB (or filtered by list of IDs) and return CSV or Excel download.
     """
-    businesses = db.query(Business).all()
+    query = db.query(Business)
+    if ids:
+        try:
+            id_list = [int(x.strip()) for x in ids.split(",") if x.strip().isdigit()]
+            if id_list:
+                query = query.filter(Business.id.in_(id_list))
+        except Exception:
+            pass
+            
+    businesses = query.all()
     if not businesses:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không có dữ liệu để xuất file.")
         
@@ -215,7 +225,7 @@ def export_businesses(
     return response
 
 
-# ── GET /businesses (Optional utility) ────────────────────────────────────────
+# Endpoint GET /businesses - Lấy danh sách doanh nghiệp tiện ích
 @router.get("/businesses", response_model=SearchResponse, status_code=status.HTTP_200_OK)
 def get_all_businesses(
     skip: int = 0,
@@ -232,11 +242,11 @@ def get_all_businesses(
 
     return SearchResponse(
         businesses=[BusinessOut.model_validate(b) for b in businesses],
-        insights=[] # Insights are usually generated per search, so return empty here.
+        insights=[] # Các thông tin chi tiết (insights) thường được tạo theo từng lượt tìm kiếm, nên trả về danh sách rỗng ở đây.
     )
 
 
-# ── DELETE /businesses ────────────────────────────────────────────────────────
+# Endpoint DELETE /businesses - Xoá toàn bộ dữ liệu doanh nghiệp trong cơ sở dữ liệu
 @router.delete("/businesses", status_code=status.HTTP_200_OK)
 def clear_all_businesses(db: Session = Depends(get_db)):
     deleted_count = db.query(Business).delete()
@@ -244,14 +254,14 @@ def clear_all_businesses(db: Session = Depends(get_db)):
     return {"message": f"Deleted {deleted_count} business records."}
 
 
-# ── POST /chat-agent ─────────────────────────────────────────────────────────
+# Endpoint POST /chat-agent - Trò chuyện thông minh và phân tích dữ liệu
 @router.post("/chat-agent", response_model=SmartChatResponse, status_code=status.HTTP_200_OK)
 def chat_agent(request: ChatAgentRequest, db: Session = Depends(get_db)):
     try:
-        # Check if query is a semantic search request starting with "/ai"
+        # Kiểm tra xem câu hỏi có phải là yêu cầu tìm kiếm ngữ nghĩa bắt đầu bằng "/ai" hay không
         cleaned_question = request.question.strip() if request.question else ""
         if cleaned_question.startswith("/ai"):
-            # Extract query text
+            # Trích xuất nội dung truy vấn thực tế sau ký tự "/ai"
             if cleaned_question.startswith("/ai "):
                 query = cleaned_question[4:].strip()
             else:
@@ -266,12 +276,82 @@ def chat_agent(request: ChatAgentRequest, db: Session = Depends(get_db)):
                     f"Semantic Search failed: {semantic_err}. Falling back to standard Text-to-SQL agent.",
                     exc_info=True
                 )
-                # Fallback to Text-to-SQL
+                # Chuyển hướng dự phòng sang Text-to-SQL tiêu chuẩn
                 return process_smart_chat(request.question, db, context=request.context)
         
-        # Standard Text-to-SQL flow
+        # Luồng xử lý Text-to-SQL tiêu chuẩn
         result = process_smart_chat(request.question, db, context=request.context)
         return result
     except Exception as e:
         logger.exception("Chat agent endpoint failed")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+# Các endpoint phục vụ so sánh và tạo báo cáo phân tích thị trường
+from pydantic import BaseModel
+from typing import List
+
+class CompareRequest(BaseModel):
+    id1: int
+    id2: int
+
+class ReportRequest(BaseModel):
+    ids: List[int]
+
+@router.post("/compare", status_code=status.HTTP_200_OK)
+def compare_businesses_route(payload: CompareRequest, db: Session = Depends(get_db)):
+    biz1 = db.query(Business).filter(Business.id == payload.id1).first()
+    biz2 = db.query(Business).filter(Business.id == payload.id2).first()
+    
+    if not biz1 or not biz2:
+        raise HTTPException(status_code=404, detail="Không tìm thấy một hoặc cả hai doanh nghiệp để so sánh.")
+        
+    from services.serpapi_service import search_businesses, fetch_reviews_for_place
+    from services.semantic_agent import generate_embedding
+    
+    db_updated = False
+    for biz in [biz1, biz2]:
+        if not biz.review_summary:
+            try:
+                logger.info(f"Fetching missing reviews on-the-fly for: {biz.name}")
+                search_results = search_businesses(biz.name, biz.address or "", max_results=1)
+                if search_results:
+                    first = search_results[0]
+                    reviews = fetch_reviews_for_place(first.get("data_id"), first.get("place_id"))
+                    if reviews:
+                        biz.review_summary = " | ".join(reviews)
+                        try:
+                            biz.embedding = generate_embedding(biz.review_summary)
+                        except Exception as emb_err:
+                            logger.error(f"Failed to generate embedding on-the-fly for {biz.name}: {emb_err}")
+                        db.add(biz)
+                        db_updated = True
+            except Exception as e:
+                logger.error(f"Failed to fetch on-the-fly reviews for {biz.name}: {e}")
+                
+    if db_updated:
+        try:
+            db.commit()
+            db.refresh(biz1)
+            db.refresh(biz2)
+        except Exception as exc:
+            db.rollback()
+            logger.error(f"Failed to save on-the-fly reviews: {exc}")
+            
+    from services.groq_service import compare_leads
+    result = compare_leads(biz1, biz2)
+    return result
+
+@router.post("/report-insights", status_code=status.HTTP_200_OK)
+def report_insights_route(payload: ReportRequest, db: Session = Depends(get_db)):
+    if not payload.ids:
+        raise HTTPException(status_code=400, detail="Danh sách ID không được để trống.")
+        
+    businesses = db.query(Business).filter(Business.id.in_(payload.ids)).all()
+    if not businesses:
+        raise HTTPException(status_code=404, detail="Không tìm thấy các doanh nghiệp yêu cầu.")
+        
+    from services.groq_service import generate_report_insights
+    result = generate_report_insights(businesses)
+    return result
+

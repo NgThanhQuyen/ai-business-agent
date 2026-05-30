@@ -14,7 +14,7 @@ from services.groq_service import safe_groq_chat_completion
 
 logger = logging.getLogger(__name__)
 
-# Lazy loaded embedding model
+# Mô hình nhúng dữ liệu (embedding) được tải chậm (lazy load)
 _embedding_model = None
 
 def get_embedding_model():
@@ -162,9 +162,9 @@ def run_semantic_search(query: str, db: Session) -> dict:
         # 5. Retrieve top businesses
         matched_businesses = []
         
-        # We try to run using database-level cosine similarity if pgvector is enabled
+        # Thử nghiệm tìm kiếm độ tương đồng cosine ở cấp độ cơ sở dữ liệu nếu pgvector được cài đặt
         try:
-            # Using pgvector <=> operator (cosine distance)
+            # Sử dụng toán tử <=> của pgvector (khoảng cách cosine)
             top_businesses = (
                 filtered_query
                 .order_by(Business.embedding.op('<=>')(query_vector))
@@ -175,11 +175,11 @@ def run_semantic_search(query: str, db: Session) -> dict:
             logger.info("Vector Search executed at DB-level via pgvector!")
             
         except Exception as db_err:
-            # Fallback to Python-native cosine similarity in memory
+            # Phương án dự phòng: tính toán độ tương đồng cosine bằng Python thuần trong bộ nhớ
             logger.warning(f"Database-level vector search failed or pgvector not available: {db_err}. Falling back to Python-native search.")
             db.rollback()
             
-            # Fetch matching businesses
+            # Lấy danh sách tất cả doanh nghiệp thỏa điều kiện
             all_businesses = filtered_query.all()
             
             candidates = []
@@ -188,7 +188,7 @@ def run_semantic_search(query: str, db: Session) -> dict:
                 if emb is None:
                     continue
                 
-                # If emb is stored as string/text (fallback mode), parse it
+                # Nếu embedding được lưu dưới dạng chuỗi văn bản (chế độ dự phòng), thực hiện giải mã
                 if isinstance(emb, str):
                     import json
                     try:
@@ -206,7 +206,7 @@ def run_semantic_search(query: str, db: Session) -> dict:
                 if len(emb_list) != 768:
                     continue
                 
-                # Compute Cosine Similarity
+                # Tính toán độ tương đồng Cosine
                 u = np.array(query_vector)
                 v = np.array(emb_list)
                 dot_product = np.dot(u, v)
@@ -220,7 +220,7 @@ def run_semantic_search(query: str, db: Session) -> dict:
                 
                 candidates.append((biz, similarity))
             
-            # Sort candidates by similarity DESC and get top 5
+            # Sắp xếp các ứng viên theo độ tương đồng giảm dần và lấy 5 kết quả cao nhất
             candidates.sort(key=lambda x: x[1], reverse=True)
             matched_businesses = [c[0] for c in candidates[:5]]
             logger.info(f"Vector Search executed at Python-level (Python-native fallback)! Found {len(matched_businesses)} matches.")
@@ -280,7 +280,7 @@ Chào bạn, dựa trên dữ liệu hiện có, em tìm được các quán ph�
         )
         ai_message = completion.choices[0].message.content or ""
         
-        # Return standard response format matching SmartChatResponse
+        # Trả về định dạng phản hồi chuẩn khớp với SmartChatResponse
         return {
             "ai_message": ai_message,
             "status": "success_enough_data",
